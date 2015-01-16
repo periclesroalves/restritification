@@ -1,0 +1,14 @@
+#OS junk files
+[Tt]humbs.db
+*.DS_Store
+
+#Project files
+build/
+build-*/
+
+#Subversion files
+.svn
+*.swp
+
+# Office Temp Files
+~$*
