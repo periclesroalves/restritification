@@ -30,8 +30,8 @@ bool AliasFunctionCloning::runOnModule(Module &M)
 			Params.push_back(A->getType());
 			AttributeSet attrs = PAL.getParamAttributes(ArgIndex);
 
-			// argument is not pointer
-			if (attrs.hasAttributes(ArgIndex)) {
+//			if (attrs.hasAttributes(ArgIndex)) {
+				// argument is not pointer
 				if (!A->getType()->isPointerTy()) {
 					AttrBuilder B(attrs, ArgIndex);
 					AttributesVec.push_back(AttributeSet::get(F.getContext(),
@@ -45,7 +45,7 @@ bool AliasFunctionCloning::runOnModule(Module &M)
 					AttributesVec.push_back(AttributeSet::get(F.getContext(),
 								Params.size(), B));
 				}
-			}
+//			}
 		}
 
 		// Function attributes
