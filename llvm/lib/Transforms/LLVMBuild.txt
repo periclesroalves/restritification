@@ -16,7 +16,8 @@
 ;===------------------------------------------------------------------------===;
 
 [common]
-subdirectories = IPO InstCombine Instrumentation Scalar Utils Vectorize ObjCARC
+subdirectories = IPO InstCombine Instrumentation Scalar Utils Vectorize
+ObjCARC AliasFunctionCloning
 
 [component_0]
 type = Group
