@@ -45,13 +45,28 @@ class AliasFunctionCloning: public ModulePass {
 public:
     static char ID;
 
+    DenseMap<Function*, Function*> clonesMap;
+    AliasAnalysis *AA;
+    const DataLayout *DL;
+
     AliasFunctionCloning() :
-            ModulePass(ID)
+            ModulePass(ID), AA(0), DL(0)
     {
     }
 
     void getAnalysisUsage(AnalysisUsage &AU) const;
     bool runOnModule(Module &M);
+
+    // Determines if all CS's real parameters are noalias among themselves
+    bool areArgsNoAlias(const CallSite &CS) const;
+
+    // Creates a noalias version of every function in M given that it
+    // contains at least one pointer argument
+    void createNoAliasFunctionClones(Module &M);
+
+    // Replaces call sites by their noalias versions whenever possible
+    // according to the static approach of using alias analysis
+    void staticRestrictification(Module &M);
     void AddAliasScopeMetadata(ValueToValueMapTy &VMap, const DataLayout *DL,
             AliasAnalysis *AA, const Function *F, Function *NF);
 };

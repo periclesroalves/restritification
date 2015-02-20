@@ -7,6 +7,10 @@
 #include "AliasFunctionCloning.h"
 
 STATISTIC(NumClonedFuncs, "Number of cloned functions");
+STATISTIC(NumStaticCInsts,
+        "Number of CallInsts statically replaced by a clone");
+STATISTIC(NumStaticIInsts,
+        "Number of InvokeInsts statically replaced by a clone");
 
 void AliasFunctionCloning::getAnalysisUsage(AnalysisUsage &AU) const
 {
@@ -15,14 +19,9 @@ void AliasFunctionCloning::getAnalysisUsage(AnalysisUsage &AU) const
     AU.addRequired<DataLayoutPass>();
 }
 
-// This code is based in Argument Promotion pass
-// and Douglas' pass.
-bool AliasFunctionCloning::runOnModule(Module &M)
+void AliasFunctionCloning::createNoAliasFunctionClones(Module &M)
 {
     Module::iterator Mit, Mend;
-
-    AliasAnalysis *AA = &getAnalysis<AliasAnalysis>();
-    const DataLayout *DL = &getAnalysis<DataLayoutPass>().getDataLayout();
 
     // check every function in module
     for (Mit = M.begin(), Mend = M.end(); Mit != Mend; ++Mit) {
@@ -64,7 +63,7 @@ bool AliasFunctionCloning::runOnModule(Module &M)
             Params.push_back(A->getType());
             AttributeSet attrs = PAL.getParamAttributes(ArgIndex);
 
-//			if (attrs.hasAttributes(ArgIndex)) {
+            //          if (attrs.hasAttributes(ArgIndex)) {
             // argument is not pointer
             if (!A->getType()->isPointerTy()) {
                 AttrBuilder B(attrs, ArgIndex);
@@ -79,7 +78,7 @@ bool AliasFunctionCloning::runOnModule(Module &M)
                 AttributesVec.push_back(
                         AttributeSet::get(F.getContext(), Params.size(), B));
             }
-//			}
+            //          }
         }
 
         // Function attributes
@@ -113,7 +112,119 @@ bool AliasFunctionCloning::runOnModule(Module &M)
 
         AddAliasScopeMetadata(VMap, DL, AA, &F, newfunc);
 
+        // Insert cloned function into the map of clones
+        const auto &it = this->clonesMap.insert(std::make_pair(&F, newfunc));
+        assert(it.second);
+
         ++NumClonedFuncs;
+    }
+}
+
+// This code is based in Argument Promotion pass
+// and Douglas' pass.
+bool AliasFunctionCloning::runOnModule(Module &M)
+{
+    this->AA = &getAnalysis<AliasAnalysis>();
+    this->DL = &getAnalysis<DataLayoutPass>().getDataLayout();
+
+    createNoAliasFunctionClones(M);
+
+    return true;
+}
+
+void AliasFunctionCloning::staticRestrictification(Module &M)
+{
+    Module::iterator Mit, Mend;
+
+    // For every function, get all calls
+    for (Mit = M.begin(), Mend = M.end(); Mit != Mend; ++Mit) {
+        Function *F = Mit;
+
+        if (clonesMap.count(F) == false)
+            continue;
+
+        SmallVector<Instruction*, 4> callSites;
+
+        for (Value::user_iterator uit = F->user_begin(), uend = F->user_end();
+                uit != uend; ++uit) {
+            Instruction *I = dyn_cast<Instruction>(*uit);
+
+            if (I && (isa<CallInst>(I) || isa<InvokeInst>(I))) {
+                callSites.push_back(I);
+            }
+        }
+
+        // For every call site, try to replace it with the noalias version
+        // of the callee.
+        // We decide whether the replacement is valid using a static approach,
+        // with alias analysis.
+        SmallVector<Instruction*, 4>::iterator cit, cend;
+        for (cit = callSites.begin(), cend = callSites.end(); cit != cend;
+                ++cit) {
+            Instruction *call = *cit;
+            CallSite CS(call);
+
+            bool noalias = areArgsNoAlias(CS);
+
+            if (!noalias)
+                continue;
+
+            SmallVector<Value*, 4> RealArgs;
+
+            for (CallSite::arg_iterator ait = CS.arg_begin(), aend =
+                    CS.arg_end(); ait != aend; ++ait) {
+                Value *V = *ait;
+                RealArgs.push_back(V);
+            }
+
+            CallInst *cinst = dyn_cast<CallInst>(call);
+            InvokeInst *iinst = dyn_cast<InvokeInst>(call);
+
+            if (cinst) {
+                CallInst *cloneCinst = CallInst::Create(clonesMap[F], RealArgs,
+                        cinst->getName(), cinst);
+                cinst->replaceAllUsesWith(cloneCinst);
+                cinst->eraseFromParent();
+
+                ++NumStaticCInsts;
+            }
+            else if (iinst) {
+                InvokeInst *cloneIinst = InvokeInst::Create(clonesMap[F],
+                        iinst->getNormalDest(), iinst->getUnwindDest(),
+                        RealArgs, iinst->getName(), iinst);
+                iinst->replaceAllUsesWith(cloneIinst);
+                iinst->eraseFromParent();
+
+                ++NumStaticIInsts;
+            }
+        }
+    }
+}
+
+bool AliasFunctionCloning::areArgsNoAlias(const CallSite &CS) const
+{
+    SmallVector<Value*, 4> argsVector;
+
+    for (CallSite::arg_iterator ait = CS.arg_begin(), aend = CS.arg_end();
+            ait != aend; ++ait) {
+        Value *V = *ait;
+        if (V->getType()->isPointerTy()) {
+            argsVector.push_back(V);
+        }
+    }
+
+    int i, j, n = argsVector.size();
+    for (i = 0; i < (n - 1); ++i) {
+        for (j = i + 1; j < n; ++j) {
+            AliasAnalysis::AliasResult res = AA->alias(argsVector[i],
+                    argsVector[j]);
+            switch (res) {
+                case AliasAnalysis::NoAlias:
+                    break;
+                default:
+                    return false;
+            }
+        }
     }
 
     return true;
@@ -136,21 +247,21 @@ void AliasFunctionCloning::AddAliasScopeMetadata(ValueToValueMapTy &VMap,
     if (FunArgs.empty())
         return;
 
-    // To do a good job, if a noalias variable is captured, we need to know if
-    // the capture point dominates the particular use we're considering.
+// To do a good job, if a noalias variable is captured, we need to know if
+// the capture point dominates the particular use we're considering.
     DominatorTree DT;
     DT.recalculate(const_cast<Function&>(*CalledFunc));
 
-    // noalias indicates that pointer values based on the argument do not alias
-    // pointer values which are not based on it. So we add a new "scope" for each
-    // noalias function argument. Accesses using pointers based on that argument
-    // become part of that alias scope, accesses using pointers not based on that
-    // argument are tagged as noalias with that scope.
+// noalias indicates that pointer values based on the argument do not alias
+// pointer values which are not based on it. So we add a new "scope" for each
+// noalias function argument. Accesses using pointers based on that argument
+// become part of that alias scope, accesses using pointers not based on that
+// argument are tagged as noalias with that scope.
 
     DenseMap<const Argument *, MDNode *> NewScopes;
     MDBuilder MDB(CalledFunc->getContext());
 
-    // Create a new scope domain for this function.
+// Create a new scope domain for this function.
     MDNode *NewDomain = MDB.createAnonymousAliasScopeDomain(
             CalledFunc->getName());
     for (unsigned i = 0, e = FunArgs.size(); i != e; ++i) {
@@ -173,8 +284,8 @@ void AliasFunctionCloning::AddAliasScopeMetadata(ValueToValueMapTy &VMap,
         NewScopes.insert(std::make_pair(A, NewScope));
     }
 
-    // Iterate over all new instructions in the map; for all memory-access
-    // instructions, add the alias scope metadata.
+// Iterate over all new instructions in the map; for all memory-access
+// instructions, add the alias scope metadata.
     for (ValueToValueMapTy::iterator VMI = VMap.begin(), VMIE = VMap.end();
             VMI != VMIE; ++VMI) {
         if (const Instruction *I = dyn_cast<Instruction>(VMI->first)) {
@@ -246,7 +357,8 @@ void AliasFunctionCloning::AddAliasScopeMetadata(ValueToValueMapTy &VMap,
             for (unsigned i = 0, ie = PtrArgs.size(); i != ie; ++i) {
                 SmallVector<Value *, 4> Objects;
                 GetUnderlyingObjects(const_cast<Value*>(PtrArgs[i]), Objects,
-                        DL, /* MaxLookup = */0);
+                        DL, /* MaxLookup = */
+                        0);
 
                 for (Value *O : Objects)
                     ObjSet.insert(O);
