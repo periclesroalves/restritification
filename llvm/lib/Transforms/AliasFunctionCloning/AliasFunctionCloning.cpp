@@ -35,16 +35,15 @@ void AliasFunctionCloning::createNoAliasFunctionClones(Module &M)
         Function::arg_iterator I, E;
 
         // first we check if this function has any pointer arguments at all
-        bool anyPointerArg = false;
+        int numPointerArg = 0;
         for (I = F.arg_begin(), E = F.arg_end(); I != E; ++I) {
             const Argument *A = I;
             if (A->getType()->isPointerTy()) {
-                anyPointerArg = true;
-                break;
+                ++numPointerArg;
             }
         }
 
-        if (anyPointerArg == false) {
+        if (numPointerArg < 2) {
             continue;
         }
 
@@ -128,6 +127,7 @@ bool AliasFunctionCloning::runOnModule(Module &M)
     this->DL = &getAnalysis<DataLayoutPass>().getDataLayout();
 
     createNoAliasFunctionClones(M);
+    staticRestrictification(M);
 
     return true;
 }
@@ -240,7 +240,7 @@ void AliasFunctionCloning::AddAliasScopeMetadata(ValueToValueMapTy &VMap,
 
     for (Function::const_arg_iterator I = CalledFunc->arg_begin(), E =
             CalledFunc->arg_end(); I != E; ++I) {
-        if (!I->hasNUses(0))
+        if (!I->hasNUses(0) && I->getType()->isPointerTy())
             FunArgs.push_back(I);
     }
 
