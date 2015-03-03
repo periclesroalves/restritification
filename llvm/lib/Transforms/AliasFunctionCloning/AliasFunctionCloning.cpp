@@ -102,6 +102,7 @@ void AliasFunctionCloning::createNoAliasFunctionClones(Module &M)
         Function::arg_iterator NI = newfunc->arg_begin();
         for (I = F.arg_begin(), E = F.arg_end(); I != E; ++I, ++NI) {
             VMap[I] = NI;
+            NI->setName(I->getName());
         }
 
         CloneFunctionInto(newfunc, &F, VMap, false, Returns);
