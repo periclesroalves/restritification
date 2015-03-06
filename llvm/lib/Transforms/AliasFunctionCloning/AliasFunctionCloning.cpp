@@ -27,7 +27,7 @@ void AliasFunctionCloning::createNoAliasFunctionClones(Module &M)
     for (Mit = M.begin(), Mend = M.end(); Mit != Mend; ++Mit) {
         Function &F = *Mit;
 
-        if (F.isDeclaration())
+        if (F.isDeclaration() || F.isVarArg())
             continue;
 
         //errs() << F.getName() << "\n";
@@ -150,8 +150,17 @@ void AliasFunctionCloning::staticRestrictification(Module &M)
                 uit != uend; ++uit) {
             Instruction *I = dyn_cast<Instruction>(*uit);
 
-            if (I && (isa<CallInst>(I) || isa<InvokeInst>(I))) {
-                callSites.push_back(I);
+            if (I) {
+                CallInst *cinst = dyn_cast<CallInst>(I);
+                if (cinst && cinst->getCalledFunction() == F) {
+                    callSites.push_back(I);
+                }
+                else {
+                    InvokeInst *iinst = dyn_cast<InvokeInst>(I);
+                    if (iinst && iinst->getCalledFunction() == F) {
+                        callSites.push_back(I);
+                    }
+                }
             }
         }
 
