@@ -27,6 +27,12 @@ void AliasFunctionCloning::createNoAliasFunctionClones(Module &M)
     for (Mit = M.begin(), Mend = M.end(); Mit != Mend; ++Mit) {
         Function &F = *Mit;
 
+        /*
+         * TODO: discuss whether we should clone "available externally"
+         * functions. They are not dumped into the object file, but have
+         * their definition available to the optimizer for it to perform
+         * inlining.
+         */
         if (F.isDeclaration() || F.isVarArg())
             continue;
 
@@ -95,6 +101,17 @@ void AliasFunctionCloning::createNoAliasFunctionClones(Module &M)
         newfunc->copyAttributesFrom(&F);
         newfunc->setAttributes(
                 AttributeSet::get(F.getContext(), AttributesVec));
+
+        // "Available externally" are functions whose definition is not
+        // dumped into the object file, but is known to the compiler for
+        // optimizations (e.g. inlining). When we find one of these functions
+        // we change its clone's type to a suitable one, that is, one that
+        // makes the clone get dumped into the object file. Otherwise,
+        // the clone wouldn't exist, leading to undefined reference when
+        // linking.
+        if (F.hasAvailableExternallyLinkage()) {
+            newfunc->setLinkage(GlobalValue::LinkOnceODRLinkage);
+        }
 
         ValueToValueMapTy VMap;
         SmallVector<ReturnInst*, 4> Returns;
