@@ -17,6 +17,8 @@ STATISTIC(NumIInsts,
 		"Number of candidate InvokeInsts");
 STATISTIC(NumFuncsCompletelyReplaced,
 		"Number of functions completely replaced by restrictification");
+STATISTIC(NumFuncs,
+		"Number of functions that take pointer arguments");
 
 void AliasFunctionCloning::getAnalysisUsage(AnalysisUsage &AU) const
 {
@@ -64,6 +66,7 @@ void AliasFunctionCloning::createNoAliasFunctionClones(Module &M)
 		SmallVector<AttributeSet, 4> AttributesVec;
 
 		const AttributeSet &PAL = F.getAttributes();
+		SmallVector<Argument*, 4> already_noalias;
 
 		// promote all pointer arguments to noalias
 		unsigned ArgIndex = 1;
@@ -74,7 +77,6 @@ void AliasFunctionCloning::createNoAliasFunctionClones(Module &M)
 			Params.push_back(A->getType());
 			AttributeSet attrs = PAL.getParamAttributes(ArgIndex);
 
-			//          if (attrs.hasAttributes(ArgIndex)) {
 			// argument is not pointer
 			if (!A->getType()->isPointerTy()) {
 				AttrBuilder B(attrs, ArgIndex);
@@ -82,14 +84,25 @@ void AliasFunctionCloning::createNoAliasFunctionClones(Module &M)
 						AttributeSet::get(F.getContext(), Params.size(), B));
 			}
 			else {
-				AttrBuilder B(attrs, ArgIndex);
-				// add noalias tag
-				B.addAttribute(
-						Attribute::get(F.getContext(), Attribute::NoAlias));
-				AttributesVec.push_back(
-						AttributeSet::get(F.getContext(), Params.size(), B));
+				if (attrs.hasAttribute(ArgIndex, Attribute::NoAlias)) {
+					already_noalias.push_back(A);
+				}
+				else {
+					AttrBuilder B(attrs, ArgIndex);
+					// add noalias tag
+					B.addAttribute(
+							Attribute::get(F.getContext(), Attribute::NoAlias));
+					AttributesVec.push_back(
+							AttributeSet::get(F.getContext(), Params.size(), B));
+				}
 			}
-			//          }
+		}
+
+		// How many arguments were already noalias?
+		// If all of them, the original function is already
+		// restrictified, so we don't need to create a clone
+		if (numPointerArg == already_noalias.size()) {
+			continue;
 		}
 
 		// Function attributes
@@ -252,8 +265,11 @@ void AliasFunctionCloning::staticRestrictification(Module &M)
 		}
 
 		// Statistics
-		if ((numTotalCalls > 0) && (numReplacedCalls == numTotalCalls)) {
-			++NumFuncsCompletelyReplaced;
+		if (numTotalCalls > 0) {
+			if (numReplacedCalls == numTotalCalls) {
+				++NumFuncsCompletelyReplaced;
+			}
+			++NumFuncs;
 		}
 	}
 }
