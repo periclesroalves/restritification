@@ -1,0 +1,30 @@
+##=== TEST.aa.report - Report description for AA tests ---------*- perl -*-===##
+#
+# This file defines a report to be generated for the alias analysis comparison
+# test.
+#
+##===----------------------------------------------------------------------===##
+
+$SortCol = 1;
+$TrimRepeatedPrefix = 1;
+
+# These are the columns for the report.  The first entry is the header for the
+# column, the second is the regex to use to match the value.  Empty list create
+# seperators, and closures may be put in for custom processing.
+(
+# Name
+            ["Name",     '\'([^\']+)\' Program'],
+            [],
+# Precision
+            ["Cloned",    '([0-9]+).*Number of cloned functions'],
+            ["NumStaticCInsts",     '([0-9]+).*Number of CallInsts statically replaced by a clone'],
+            ["NumCInsts",     '([0-9]+).*Number of candidate CallInsts'],
+            ["NumStaticIInsts",     '([0-9]+).*Number of InvokeInsts statically replaced by a clone'],
+            ["NumIInsts",     '([0-9]+).*Number of candidate InvokeInsts'],
+			["NumFuncsCompletelyReplaced",	'([0-9]+).*Number of functions completely replaced by restrictification'],
+            [],
+# Times
+#Output/treeadd.aa.andersens.txt:   Total Execution Time: 0 seconds (0.00111997 wall clock)
+            ["time",     '([0-9.]+).*Alias Function Cloning pass'],
+            [],
+);
