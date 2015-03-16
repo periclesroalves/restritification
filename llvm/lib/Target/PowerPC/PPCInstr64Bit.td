@@ -686,7 +686,7 @@ defm RLWIMI8 : MForm_2r<20, (outs g8rc:$rA),
 let isSelect = 1 in
 def ISEL8   : AForm_4<31, 15,
                      (outs g8rc:$rT), (ins g8rc_nox0:$rA, g8rc:$rB, crbitrc:$cond),
-                     "isel $rT, $rA, $rB, $cond", IIC_IntISEL,
+                     "isel $rT, $rA, $rB, $cond", IIC_IntGeneral,
                      []>;
 }  // Interpretation64Bit
 }  // hasSideEffects = 0
@@ -837,6 +837,11 @@ def LDtocBA: Pseudo<(outs g8rc:$rD), (ins tocentry:$disp, g8rc:$reg),
                   [(set i64:$rD,
                      (PPCtoc_entry tblockaddress:$disp, i64:$reg))]>, isPPC64;
 
+let hasSideEffects = 1, isCodeGenOnly = 1, RST = 2, Defs = [X2] in
+def LDinto_toc: DSForm_1<58, 0, (outs), (ins memrix:$src),
+                    "ld 2, $src", IIC_LdStLD,
+                    [(PPCload_toc ixaddr:$src)]>, isPPC64;
+
 def LDX  : XForm_1<31,  21, (outs g8rc:$rD), (ins memrr:$src),
                    "ldx $rD, $src", IIC_LdStLD,
                    [(set i64:$rD, (load xaddr:$src))]>, isPPC64;
@@ -864,6 +869,11 @@ def LDUX : XForm_1<31, 53, (outs g8rc:$rD, ptr_rc_nor0:$ea_result),
                    NoEncode<"$ea_result">, isPPC64;
 }
 }
+
+def : Pat<(PPCload ixaddr:$src),
+          (LD ixaddr:$src)>;
+def : Pat<(PPCload xaddr:$src),
+          (LDX xaddr:$src)>;
 
 // Support for medium and large code model.
 def ADDIStocHA: Pseudo<(outs g8rc:$rD), (ins g8rc_nox0:$reg, tocentry:$disp),

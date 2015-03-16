@@ -1,5 +1,4 @@
 ; RUN: llc -march=amdgcn -mcpu=SI -mattr=-promote-alloca -verify-machineinstrs < %s
-; RUN: llc -march=amdgcn -mcpu=tonga -mattr=-promote-alloca -verify-machineinstrs < %s
 
 ; Test that CopyToReg instructions don't have non-register operands prior
 ; to being emitted.

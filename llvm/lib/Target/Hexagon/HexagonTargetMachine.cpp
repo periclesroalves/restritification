@@ -71,7 +71,7 @@ HexagonTargetMachine::HexagonTargetMachine(const Target &T, StringRef TT,
                                            CodeGenOpt::Level OL)
     : LLVMTargetMachine(T, TT, CPU, FS, Options, RM, CM, OL),
       TLOF(make_unique<HexagonTargetObjectFile>()),
-      DL("e-m:e-p:32:32-i1:32-i64:64-a:0-n32"), Subtarget(TT, CPU, FS, *this) {
+      Subtarget(TT, CPU, FS, *this) {
     initAsmInfo();
 }
 
@@ -138,9 +138,10 @@ void HexagonPassConfig::addPreRegAlloc() {
 }
 
 void HexagonPassConfig::addPostRegAlloc() {
+  const HexagonTargetMachine &TM = getHexagonTargetMachine();
   if (getOptLevel() != CodeGenOpt::None)
     if (!DisableHexagonCFGOpt)
-      addPass(createHexagonCFGOptimizer(), false);
+      addPass(createHexagonCFGOptimizer(TM), false);
 }
 
 void HexagonPassConfig::addPreSched2() {
@@ -160,7 +161,7 @@ void HexagonPassConfig::addPreEmitPass() {
     addPass(createHexagonNewValueJump(), false);
 
   // Expand Spill code for predicate registers.
-  addPass(createHexagonExpandPredSpillCode(), false);
+  addPass(createHexagonExpandPredSpillCode(TM), false);
 
   // Split up TFRcondsets into conditional transfers.
   addPass(createHexagonSplitTFRCondSets(TM), false);

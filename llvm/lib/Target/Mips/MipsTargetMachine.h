@@ -15,12 +15,10 @@
 #define LLVM_LIB_TARGET_MIPS_MIPSTARGETMACHINE_H
 
 #include "MipsSubtarget.h"
-#include "llvm/CodeGen/BasicTTIImpl.h"
 #include "llvm/CodeGen/Passes.h"
 #include "llvm/CodeGen/SelectionDAGISel.h"
 #include "llvm/Target/TargetFrameLowering.h"
 #include "llvm/Target/TargetMachine.h"
-#include "MCTargetDesc/MipsABIInfo.h"
 
 namespace llvm {
 class formatted_raw_ostream;
@@ -29,9 +27,6 @@ class MipsRegisterInfo;
 class MipsTargetMachine : public LLVMTargetMachine {
   bool isLittle;
   std::unique_ptr<TargetLoweringObjectFile> TLOF;
-  // Selected ABI
-  MipsABIInfo ABI;
-  const DataLayout DL; // Calculates type size & alignment
   MipsSubtarget *Subtarget;
   MipsSubtarget DefaultSubtarget;
   MipsSubtarget NoMips16Subtarget;
@@ -45,9 +40,8 @@ public:
                     CodeModel::Model CM, CodeGenOpt::Level OL, bool isLittle);
   ~MipsTargetMachine() override;
 
-  TargetIRAnalysis getTargetIRAnalysis() override;
+  void addAnalysisPasses(PassManagerBase &PM) override;
 
-  const DataLayout *getDataLayout() const override { return &DL; }
   const MipsSubtarget *getSubtargetImpl() const override {
     if (Subtarget)
       return Subtarget;
@@ -67,7 +61,6 @@ public:
   }
 
   bool isLittleEndian() const { return isLittle; }
-  const MipsABIInfo &getABI() const { return ABI; }
 };
 
 /// MipsebTargetMachine - Mips32/64 big endian target machine.

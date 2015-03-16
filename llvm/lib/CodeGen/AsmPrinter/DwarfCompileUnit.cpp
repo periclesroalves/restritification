@@ -737,22 +737,27 @@ void DwarfCompileUnit::addVariableAddress(const DbgVariable &DV, DIE &Die,
   else if (DV.isBlockByrefVariable())
     addBlockByrefAddress(DV, Die, dwarf::DW_AT_location, Location);
   else
-    addAddress(Die, dwarf::DW_AT_location, Location);
+    addAddress(Die, dwarf::DW_AT_location, Location,
+               DV.getVariable().isIndirect());
 }
 
 /// Add an address attribute to a die based on the location provided.
 void DwarfCompileUnit::addAddress(DIE &Die, dwarf::Attribute Attribute,
-                                  const MachineLocation &Location) {
+                                  const MachineLocation &Location,
+                                  bool Indirect) {
   DIELoc *Loc = new (DIEValueAllocator) DIELoc();
 
   bool validReg;
-  if (Location.isReg())
+  if (Location.isReg() && !Indirect)
     validReg = addRegisterOpPiece(*Loc, Location.getReg());
   else
     validReg = addRegisterOffset(*Loc, Location.getReg(), Location.getOffset());
 
   if (!validReg)
     return;
+
+  if (!Location.isReg() && Indirect)
+    addUInt(*Loc, dwarf::DW_FORM_data1, dwarf::DW_OP_deref);
 
   // Now attach the location information to the DIE.
   addBlock(Die, Attribute, Loc);
@@ -768,18 +773,21 @@ void DwarfCompileUnit::addComplexAddress(const DbgVariable &DV, DIE &Die,
   DIELoc *Loc = new (DIEValueAllocator) DIELoc();
   DIEDwarfExpression DwarfExpr(*Asm, *this, *Loc);
   DIExpression Expr = DV.getExpression();
-  bool ValidReg;
   if (Location.getOffset()) {
-    ValidReg = DwarfExpr.AddMachineRegIndirect(Location.getReg(),
-                                               Location.getOffset());
-    if (ValidReg)
+    if (DwarfExpr.AddMachineRegIndirect(Location.getReg(),
+                                        Location.getOffset())) {
       DwarfExpr.AddExpression(Expr);
-  } else
-    ValidReg = DwarfExpr.AddMachineRegExpression(Expr, Location.getReg());
+      assert(!DV.getVariable().isIndirect()
+             && "double indirection not handled");
+    }
+  } else {
+    if (DwarfExpr.AddMachineRegExpression(Expr, Location.getReg()))
+      if (DV.getVariable().isIndirect())
+        DwarfExpr.EmitOp(dwarf::DW_OP_deref);
+  }
 
   // Now attach the location information to the DIE.
-  if (ValidReg)
-    addBlock(Die, Attribute, Loc);
+  addBlock(Die, Attribute, Loc);
 }
 
 /// Add a Dwarf loclistptr attribute data and value.

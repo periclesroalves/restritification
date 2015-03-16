@@ -144,20 +144,21 @@ namespace {
       ARMFunctionInfo *AFI = MF.getInfo<ARMFunctionInfo>();
       if (AFI->getGlobalBaseReg() == 0)
         return false;
-      const ARMSubtarget &STI =
-          static_cast<const ARMSubtarget &>(MF.getSubtarget());
-      const TargetMachine &TM = MF.getTarget();
-      if (TM.getRelocationModel() != Reloc::PIC_)
+
+      const ARMTargetMachine *TM =
+        static_cast<const ARMTargetMachine *>(&MF.getTarget());
+      if (TM->getRelocationModel() != Reloc::PIC_)
         return false;
 
       LLVMContext *Context = &MF.getFunction()->getContext();
       unsigned ARMPCLabelIndex = AFI->createPICLabelUId();
-      unsigned PCAdj = STI.isThumb() ? 4 : 8;
+      unsigned PCAdj = TM->getSubtarget<ARMSubtarget>().isThumb() ? 4 : 8;
       ARMConstantPoolValue *CPV = ARMConstantPoolSymbol::Create(
           *Context, "_GLOBAL_OFFSET_TABLE_", ARMPCLabelIndex, PCAdj);
 
-      unsigned Align = TM.getDataLayout()->getPrefTypeAlignment(
-          Type::getInt32PtrTy(*Context));
+      unsigned Align =
+          TM->getSubtargetImpl()->getDataLayout()->getPrefTypeAlignment(
+              Type::getInt32PtrTy(*Context));
       unsigned Idx = MF.getConstantPool()->getConstantPoolIndex(CPV, Align);
 
       MachineBasicBlock &FirstMBB = MF.front();
@@ -165,8 +166,9 @@ namespace {
       DebugLoc DL = FirstMBB.findDebugLoc(MBBI);
       unsigned TempReg =
           MF.getRegInfo().createVirtualRegister(&ARM::rGPRRegClass);
-      unsigned Opc = STI.isThumb2() ? ARM::t2LDRpci : ARM::LDRcp;
-      const TargetInstrInfo &TII = *STI.getInstrInfo();
+      unsigned Opc = TM->getSubtarget<ARMSubtarget>().isThumb2() ?
+                     ARM::t2LDRpci : ARM::LDRcp;
+      const TargetInstrInfo &TII = *TM->getSubtargetImpl()->getInstrInfo();
       MachineInstrBuilder MIB = BuildMI(FirstMBB, MBBI, DL,
                                         TII.get(Opc), TempReg)
                                 .addConstantPoolIndex(Idx);
@@ -176,12 +178,14 @@ namespace {
 
       // Fix the GOT address by adding pc.
       unsigned GlobalBaseReg = AFI->getGlobalBaseReg();
-      Opc = STI.isThumb2() ? ARM::tPICADD : ARM::PICADD;
+      Opc = TM->getSubtarget<ARMSubtarget>().isThumb2() ? ARM::tPICADD
+                                                        : ARM::PICADD;
       MIB = BuildMI(FirstMBB, MBBI, DL, TII.get(Opc), GlobalBaseReg)
                 .addReg(TempReg)
                 .addImm(ARMPCLabelIndex);
       if (Opc == ARM::PICADD)
         AddDefaultPred(MIB);
+
 
       return true;
     }

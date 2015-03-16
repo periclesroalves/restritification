@@ -201,17 +201,7 @@ const MCSymbol *MCAsmLayout::getBaseSymbol(const MCSymbol &Symbol) const {
   if (!A)
     return nullptr;
 
-  const MCSymbol &ASym = A->getSymbol();
-  const MCAssembler &Asm = getAssembler();
-  const MCSymbolData &ASD = Asm.getSymbolData(ASym);
-  if (ASD.isCommon()) {
-    // FIXME: we should probably add a SMLoc to MCExpr.
-    Asm.getContext().FatalError(SMLoc(),
-                                "Common symbol " + ASym.getName() +
-                                    " cannot be used in assignment expr");
-  }
-
-  return &ASym;
+  return &A->getSymbol();
 }
 
 uint64_t MCAsmLayout::getSectionAddressSize(const MCSectionData *SD) const {
@@ -435,16 +425,6 @@ bool MCAssembler::isThumbFunc(const MCSymbol *Symbol) const {
   return true;
 }
 
-void MCAssembler::addLocalUsedInReloc(const MCSymbol &Sym) {
-  assert(Sym.isTemporary());
-  LocalsUsedInReloc.insert(&Sym);
-}
-
-bool MCAssembler::isLocalUsedInReloc(const MCSymbol &Sym) const {
-  assert(Sym.isTemporary());
-  return LocalsUsedInReloc.count(&Sym);
-}
-
 bool MCAssembler::isSymbolLinkerVisible(const MCSymbol &Symbol) const {
   // Non-temporary labels should always be visible to the linker.
   if (!Symbol.isTemporary())
@@ -454,10 +434,8 @@ bool MCAssembler::isSymbolLinkerVisible(const MCSymbol &Symbol) const {
   if (!Symbol.isInSection())
     return false;
 
-  if (isLocalUsedInReloc(Symbol))
-    return true;
-
-  return false;
+  // Otherwise, check if the section requires symbols even for temporary labels.
+  return getBackend().doesSectionRequireSymbols(Symbol.getSection());
 }
 
 const MCSymbolData *MCAssembler::getAtom(const MCSymbolData *SD) const {

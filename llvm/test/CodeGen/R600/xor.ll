@@ -1,5 +1,4 @@
 ; RUN: llc -march=amdgcn -mcpu=verde -verify-machineinstrs < %s | FileCheck -check-prefix=SI -check-prefix=FUNC %s
-; RUN: llc -march=amdgcn -mcpu=tonga -verify-machineinstrs < %s | FileCheck -check-prefix=SI -check-prefix=FUNC %s
 ; RUN: llc -march=r600 -mcpu=redwood < %s | FileCheck -check-prefix=EG -check-prefix=FUNC %s
 
 
@@ -58,8 +57,8 @@ define void @xor_i1(float addrspace(1)* %out, float addrspace(1)* %in0, float ad
 }
 
 ; FUNC-LABEL: {{^}}v_xor_i1:
-; SI: buffer_load_ubyte [[B:v[0-9]+]]
 ; SI: buffer_load_ubyte [[A:v[0-9]+]]
+; SI: buffer_load_ubyte [[B:v[0-9]+]]
 ; SI: v_xor_b32_e32 [[XOR:v[0-9]+]], [[A]], [[B]]
 ; SI: v_and_b32_e32 [[RESULT:v[0-9]+]], 1, [[XOR]]
 ; SI: buffer_store_byte [[RESULT]]

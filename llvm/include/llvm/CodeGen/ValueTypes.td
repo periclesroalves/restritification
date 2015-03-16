@@ -98,6 +98,3 @@ def iAny   : ValueType<0  , 254>;
 
 // Pseudo valuetype mapped to the current pointer size.
 def iPTR   : ValueType<0  , 255>;
-
-// Pseudo valuetype to represent "any type of any size".
-def Any    : ValueType<0  , 256>;

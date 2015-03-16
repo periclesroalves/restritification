@@ -20,6 +20,7 @@
 #include "Hexagon.h"
 #include "HexagonMachineFunctionInfo.h"
 #include "HexagonSubtarget.h"
+#include "HexagonTargetMachine.h"
 #include "llvm/ADT/Statistic.h"
 #include "llvm/CodeGen/LatencyPriorityQueue.h"
 #include "llvm/CodeGen/MachineDominators.h"
@@ -48,9 +49,13 @@ namespace llvm {
 namespace {
 
 class HexagonExpandPredSpillCode : public MachineFunctionPass {
+    const HexagonTargetMachine& QTM;
+    const HexagonSubtarget &QST;
+
  public:
     static char ID;
-    HexagonExpandPredSpillCode() : MachineFunctionPass(ID) {
+    HexagonExpandPredSpillCode(const HexagonTargetMachine& TM) :
+      MachineFunctionPass(ID), QTM(TM), QST(*TM.getSubtargetImpl()) {
       PassRegistry &Registry = *PassRegistry::getPassRegistry();
       initializeHexagonExpandPredSpillCodePass(Registry);
     }
@@ -67,8 +72,7 @@ char HexagonExpandPredSpillCode::ID = 0;
 
 bool HexagonExpandPredSpillCode::runOnMachineFunction(MachineFunction &Fn) {
 
-  const HexagonSubtarget &QST = Fn.getSubtarget<HexagonSubtarget>();
-  const HexagonInstrInfo *TII = QST.getInstrInfo();
+  const HexagonInstrInfo *TII = QTM.getSubtargetImpl()->getInstrInfo();
 
   // Loop over all of the basic blocks.
   for (MachineFunction::iterator MBBb = Fn.begin(), MBBe = Fn.end();
@@ -82,8 +86,10 @@ bool HexagonExpandPredSpillCode::runOnMachineFunction(MachineFunction &Fn) {
       if (Opc == Hexagon::STriw_pred) {
         // STriw_pred [R30], ofst, SrcReg;
         unsigned FP = MI->getOperand(0).getReg();
-        assert(FP == QST.getRegisterInfo()->getFrameRegister() &&
-               "Not a Frame Pointer, Nor a Spill Slot");
+        assert(
+            FP ==
+                QTM.getSubtargetImpl()->getRegisterInfo()->getFrameRegister() &&
+            "Not a Frame Pointer, Nor a Spill Slot");
         assert(MI->getOperand(1).isImm() && "Not an offset");
         int Offset = MI->getOperand(1).getImm();
         int SrcReg = MI->getOperand(2).getReg();
@@ -129,8 +135,10 @@ bool HexagonExpandPredSpillCode::runOnMachineFunction(MachineFunction &Fn) {
         assert(Hexagon::PredRegsRegClass.contains(DstReg) &&
                "Not a predicate register");
         unsigned FP = MI->getOperand(1).getReg();
-        assert(FP == QST.getRegisterInfo()->getFrameRegister() &&
-               "Not a Frame Pointer, Nor a Spill Slot");
+        assert(
+            FP ==
+                QTM.getSubtargetImpl()->getRegisterInfo()->getFrameRegister() &&
+            "Not a Frame Pointer, Nor a Spill Slot");
         assert(MI->getOperand(2).isImm() && "Not an offset");
         int Offset = MI->getOperand(2).getImm();
         if (!TII->isValidOffset(Hexagon::L2_loadri_io, Offset)) {
@@ -192,6 +200,6 @@ void llvm::initializeHexagonExpandPredSpillCodePass(PassRegistry &Registry) {
 }
 
 FunctionPass*
-llvm::createHexagonExpandPredSpillCode() {
-  return new HexagonExpandPredSpillCode();
+llvm::createHexagonExpandPredSpillCode(const HexagonTargetMachine &TM) {
+  return new HexagonExpandPredSpillCode(TM);
 }

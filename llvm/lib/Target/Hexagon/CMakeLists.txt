@@ -13,6 +13,7 @@ add_public_tablegen_target(HexagonCommonTableGen)
 
 add_llvm_target(HexagonCodeGen
   HexagonAsmPrinter.cpp
+  HexagonCallingConvLower.cpp
   HexagonCFGOptimizer.cpp
   HexagonCopyToCombine.cpp
   HexagonExpandPredSpillCode.cpp

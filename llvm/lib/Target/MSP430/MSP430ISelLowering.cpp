@@ -1201,7 +1201,8 @@ MSP430TargetLowering::EmitShiftInstr(MachineInstr *MI,
   MachineFunction *F = BB->getParent();
   MachineRegisterInfo &RI = F->getRegInfo();
   DebugLoc dl = MI->getDebugLoc();
-  const TargetInstrInfo &TII = *F->getSubtarget().getInstrInfo();
+  const TargetInstrInfo &TII =
+      *getTargetMachine().getSubtargetImpl()->getInstrInfo();
 
   unsigned Opc;
   const TargetRegisterClass * RC;
@@ -1312,7 +1313,8 @@ MSP430TargetLowering::EmitInstrWithCustomInserter(MachineInstr *MI,
       Opc == MSP430::Srl8 || Opc == MSP430::Srl16)
     return EmitShiftInstr(MI, BB);
 
-  const TargetInstrInfo &TII = *BB->getParent()->getSubtarget().getInstrInfo();
+  const TargetInstrInfo &TII =
+      *getTargetMachine().getSubtargetImpl()->getInstrInfo();
   DebugLoc dl = MI->getDebugLoc();
 
   assert((Opc == MSP430::Select16 || Opc == MSP430::Select8) &&

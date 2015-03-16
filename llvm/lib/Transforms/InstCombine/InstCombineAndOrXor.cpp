@@ -11,7 +11,7 @@
 //
 //===----------------------------------------------------------------------===//
 
-#include "InstCombineInternal.h"
+#include "InstCombine.h"
 #include "llvm/Analysis/InstructionSimplify.h"
 #include "llvm/IR/ConstantRange.h"
 #include "llvm/IR/Intrinsics.h"

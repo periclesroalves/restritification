@@ -43,9 +43,8 @@ namespace {
           *OutStreamer.getTargetStreamer());
     }
   public:
-    explicit SparcAsmPrinter(TargetMachine &TM,
-                             std::unique_ptr<MCStreamer> Streamer)
-        : AsmPrinter(TM, std::move(Streamer)) {}
+    explicit SparcAsmPrinter(TargetMachine &TM, MCStreamer &Streamer)
+      : AsmPrinter(TM, Streamer) {}
 
     const char *getPassName() const override {
       return "Sparc Assembly Printer";
@@ -278,7 +277,7 @@ void SparcAsmPrinter::EmitInstruction(const MachineInstr *MI)
 }
 
 void SparcAsmPrinter::EmitFunctionBodyStart() {
-  if (!MF->getSubtarget<SparcSubtarget>().is64Bit())
+  if (!TM.getSubtarget<SparcSubtarget>().is64Bit())
     return;
 
   const MachineRegisterInfo &MRI = MF->getRegInfo();
@@ -297,7 +296,7 @@ void SparcAsmPrinter::EmitFunctionBodyStart() {
 
 void SparcAsmPrinter::printOperand(const MachineInstr *MI, int opNum,
                                    raw_ostream &O) {
-  const DataLayout *DL = TM.getDataLayout();
+  const DataLayout *DL = TM.getSubtargetImpl()->getDataLayout();
   const MachineOperand &MO = MI->getOperand (opNum);
   SparcMCExpr::VariantKind TF = (SparcMCExpr::VariantKind) MO.getTargetFlags();
 
@@ -451,7 +450,8 @@ void SparcAsmPrinter::EmitEndOfAsmFile(Module &M) {
   MachineModuleInfoELF::SymbolListTy Stubs = MMIELF.GetGVStubList();
   if (!Stubs.empty()) {
     OutStreamer.SwitchSection(TLOFELF.getDataSection());
-    unsigned PtrSize = TM.getDataLayout()->getPointerSize(0);
+    unsigned PtrSize =
+        TM.getSubtargetImpl()->getDataLayout()->getPointerSize(0);
     for (unsigned i = 0, e = Stubs.size(); i != e; ++i) {
       OutStreamer.EmitLabel(Stubs[i].first);
       OutStreamer.EmitSymbolValue(Stubs[i].second.getPointer(), PtrSize);

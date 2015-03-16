@@ -395,7 +395,6 @@ public:
   MachO::symtab_command getSymtabLoadCommand() const;
   MachO::dysymtab_command getDysymtabLoadCommand() const;
   MachO::linkedit_data_command getDataInCodeLoadCommand() const;
-  MachO::linkedit_data_command getLinkOptHintsLoadCommand() const;
   ArrayRef<uint8_t> getDyldInfoRebaseOpcodes() const;
   ArrayRef<uint8_t> getDyldInfoBindOpcodes() const;
   ArrayRef<uint8_t> getDyldInfoWeakBindOpcodes() const;
@@ -438,7 +437,6 @@ private:
   const char *SymtabLoadCmd;
   const char *DysymtabLoadCmd;
   const char *DataInCodeLoadCmd;
-  const char *LinkOptHintsLoadCmd;
   const char *DyldInfoLoadCmd;
   const char *UuidLoadCmd;
   bool HasPageZeroSegment;

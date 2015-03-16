@@ -207,8 +207,7 @@ class AArch64TargetLowering : public TargetLowering {
   bool RequireStrictAlign;
 
 public:
-  explicit AArch64TargetLowering(const TargetMachine &TM,
-                                 const AArch64Subtarget &STI);
+  explicit AArch64TargetLowering(const TargetMachine &TM);
 
   /// Selects the correct CCAssignFn for a given CallingConvention value.
   CCAssignFn *CCAssignFnForCall(CallingConv::ID CC, bool IsVarArg) const;
@@ -223,7 +222,7 @@ public:
   MVT getScalarShiftAmountTy(EVT LHSTy) const override;
 
   /// allowsMisalignedMemoryAccesses - Returns true if the target allows
-  /// unaligned memory accesses of the specified type.
+  /// unaligned memory accesses. of the specified type.
   bool allowsMisalignedMemoryAccesses(EVT VT, unsigned AddrSpace = 0,
                                       unsigned Align = 1,
                                       bool *Fast = nullptr) const override {

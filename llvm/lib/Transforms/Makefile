@@ -8,7 +8,7 @@
 ##===----------------------------------------------------------------------===##
 
 LEVEL = ../..
-PARALLEL_DIRS = Utils Instrumentation Scalar InstCombine IPO Vectorize Hello ObjCARC AliasFunctionCloning
+PARALLEL_DIRS = Utils Instrumentation Scalar InstCombine IPO Vectorize Hello ObjCARC
 
 include $(LEVEL)/Makefile.config
 

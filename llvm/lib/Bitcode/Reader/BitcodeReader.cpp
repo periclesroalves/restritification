@@ -11,11 +11,9 @@
 #include "BitcodeReader.h"
 #include "llvm/ADT/SmallString.h"
 #include "llvm/ADT/SmallVector.h"
-#include "llvm/ADT/Triple.h"
 #include "llvm/Bitcode/LLVMBitCodes.h"
 #include "llvm/IR/AutoUpgrade.h"
 #include "llvm/IR/Constants.h"
-#include "llvm/IR/DebugInfoMetadata.h"
 #include "llvm/IR/DerivedTypes.h"
 #include "llvm/IR/DiagnosticPrinter.h"
 #include "llvm/IR/InlineAsm.h"
@@ -158,27 +156,19 @@ static bool ConvertToString(ArrayRef<uint64_t> Record, unsigned Idx,
   return false;
 }
 
-static bool hasImplicitComdat(size_t Val) {
-  switch (Val) {
-  default:
-    return false;
-  case 1:  // Old WeakAnyLinkage
-  case 4:  // Old LinkOnceAnyLinkage
-  case 10: // Old WeakODRLinkage
-  case 11: // Old LinkOnceODRLinkage
-    return true;
-  }
-}
-
 static GlobalValue::LinkageTypes getDecodedLinkage(unsigned Val) {
   switch (Val) {
   default: // Map unknown/new linkages to external
   case 0:
     return GlobalValue::ExternalLinkage;
+  case 1:
+    return GlobalValue::WeakAnyLinkage;
   case 2:
     return GlobalValue::AppendingLinkage;
   case 3:
     return GlobalValue::InternalLinkage;
+  case 4:
+    return GlobalValue::LinkOnceAnyLinkage;
   case 5:
     return GlobalValue::ExternalLinkage; // Obsolete DLLImportLinkage
   case 6:
@@ -189,6 +179,10 @@ static GlobalValue::LinkageTypes getDecodedLinkage(unsigned Val) {
     return GlobalValue::CommonLinkage;
   case 9:
     return GlobalValue::PrivateLinkage;
+  case 10:
+    return GlobalValue::WeakODRLinkage;
+  case 11:
+    return GlobalValue::LinkOnceODRLinkage;
   case 12:
     return GlobalValue::AvailableExternallyLinkage;
   case 13:
@@ -197,18 +191,6 @@ static GlobalValue::LinkageTypes getDecodedLinkage(unsigned Val) {
     return GlobalValue::PrivateLinkage; // Obsolete LinkerPrivateWeakLinkage
   case 15:
     return GlobalValue::ExternalLinkage; // Obsolete LinkOnceODRAutoHideLinkage
-  case 1: // Old value with implicit comdat.
-  case 16:
-    return GlobalValue::WeakAnyLinkage;
-  case 10: // Old value with implicit comdat.
-  case 17:
-    return GlobalValue::WeakODRLinkage;
-  case 4: // Old value with implicit comdat.
-  case 18:
-    return GlobalValue::LinkOnceAnyLinkage;
-  case 11: // Old value with implicit comdat.
-  case 19:
-    return GlobalValue::LinkOnceODRLinkage;
   }
 }
 
@@ -543,8 +525,9 @@ void BitcodeReaderMDValueList::AssignValue(Metadata *MD, unsigned Idx) {
   }
 
   // If there was a forward reference to this value, replace it.
-  TempMDTuple PrevMD(cast<MDTuple>(OldMD.get()));
+  MDNodeFwdDecl *PrevMD = cast<MDNodeFwdDecl>(OldMD.get());
   PrevMD->replaceAllUsesWith(MD);
+  MDNode::deleteTemporary(PrevMD);
   --NumFwdRefs;
 }
 
@@ -555,10 +538,18 @@ Metadata *BitcodeReaderMDValueList::getValueFwdRef(unsigned Idx) {
   if (Metadata *MD = MDValuePtrs[Idx])
     return MD;
 
-  // Create and return a placeholder, which will later be RAUW'd.
-  AnyFwdRefs = true;
+  // Track forward refs to be resolved later.
+  if (AnyFwdRefs) {
+    MinFwdRef = std::min(MinFwdRef, Idx);
+    MaxFwdRef = std::max(MaxFwdRef, Idx);
+  } else {
+    AnyFwdRefs = true;
+    MinFwdRef = MaxFwdRef = Idx;
+  }
   ++NumFwdRefs;
-  Metadata *MD = MDNode::getTemporary(Context, None).release();
+
+  // Create and return a placeholder, which will later be RAUW'd.
+  Metadata *MD = MDNode::getTemporary(Context, None);
   MDValuePtrs[Idx].reset(MD);
   return MD;
 }
@@ -573,14 +564,15 @@ void BitcodeReaderMDValueList::tryToResolveCycles() {
     return;
 
   // Resolve any cycles.
-  for (auto &MD : MDValuePtrs) {
-    auto *N = dyn_cast_or_null<MDNode>(MD);
-    if (!N)
-      continue;
-
-    assert(!N->isTemporary() && "Unexpected forward reference");
-    N->resolveCycles();
+  for (unsigned I = MinFwdRef, E = MaxFwdRef + 1; I != E; ++I) {
+    auto &MD = MDValuePtrs[I];
+    assert(!(MD && isa<MDNodeFwdDecl>(MD)) && "Unexpected forward reference");
+    if (auto *N = dyn_cast_or_null<UniquableMDNode>(MD))
+      N->resolveCycles();
   }
+
+  // Make sure we return early again until there's another forward ref.
+  AnyFwdRefs = false;
 }
 
 Type *BitcodeReader::getTypeByID(unsigned ID) {
@@ -951,17 +943,12 @@ std::error_code BitcodeReader::ParseTypeTableBody() {
     case bitc::TYPE_CODE_X86_MMX:   // X86_MMX
       ResultTy = Type::getX86_MMXTy(Context);
       break;
-    case bitc::TYPE_CODE_INTEGER: { // INTEGER: [width]
+    case bitc::TYPE_CODE_INTEGER:   // INTEGER: [width]
       if (Record.size() < 1)
         return Error("Invalid record");
 
-      uint64_t NumBits = Record[0];
-      if (NumBits < IntegerType::MIN_INT_BITS ||
-          NumBits > IntegerType::MAX_INT_BITS)
-        return Error("Bitwidth for integer type out of range");
-      ResultTy = IntegerType::get(Context, NumBits);
+      ResultTy = IntegerType::get(Context, Record[0]);
       break;
-    }
     case bitc::TYPE_CODE_POINTER: { // POINTER: [pointee type] or
                                     //          [pointee type, address space]
       if (Record.size() < 1)
@@ -1101,10 +1088,8 @@ std::error_code BitcodeReader::ParseTypeTableBody() {
 
     if (NumRecords >= TypeList.size())
       return Error("Invalid TYPE table");
-    if (TypeList[NumRecords])
-      return Error(
-          "Invalid TYPE table: Only named structs can be forward referenced");
     assert(ResultTy && "Didn't read a type?");
+    assert(!TypeList[NumRecords] && "Already read type?");
     TypeList[NumRecords++] = ResultTy;
   }
 }
@@ -1114,8 +1099,6 @@ std::error_code BitcodeReader::ParseValueSymbolTable() {
     return Error("Invalid record");
 
   SmallVector<uint64_t, 64> Record;
-
-  Triple TT(TheModule->getTargetTriple());
 
   // Read all the records for this value table.
   SmallString<128> ValueName;
@@ -1147,14 +1130,6 @@ std::error_code BitcodeReader::ParseValueSymbolTable() {
       Value *V = ValueList[ValueID];
 
       V->setName(StringRef(ValueName.data(), ValueName.size()));
-      if (auto *GO = dyn_cast<GlobalObject>(V)) {
-        if (GO->getComdat() == reinterpret_cast<Comdat *>(1)) {
-          if (TT.isOSBinFormatMachO())
-            GO->setComdat(nullptr);
-          else
-            GO->setComdat(TheModule->getOrInsertComdat(V->getName()));
-        }
-      }
       ValueName.clear();
       break;
     }
@@ -2177,8 +2152,7 @@ std::error_code BitcodeReader::ParseModule(bool Resume) {
       Ty = cast<PointerType>(Ty)->getElementType();
 
       bool isConstant = Record[1];
-      uint64_t RawLinkage = Record[3];
-      GlobalValue::LinkageTypes Linkage = getDecodedLinkage(RawLinkage);
+      GlobalValue::LinkageTypes Linkage = getDecodedLinkage(Record[3]);
       unsigned Alignment = (1 << Record[4]) >> 1;
       std::string Section;
       if (Record[5]) {
@@ -2216,7 +2190,7 @@ std::error_code BitcodeReader::ParseModule(bool Resume) {
       if (Record.size() > 10)
         NewGV->setDLLStorageClass(GetDecodedDLLStorageClass(Record[10]));
       else
-        UpgradeDLLImportExportLinkage(NewGV, RawLinkage);
+        UpgradeDLLImportExportLinkage(NewGV, Record[3]);
 
       ValueList.push_back(NewGV);
 
@@ -2224,14 +2198,11 @@ std::error_code BitcodeReader::ParseModule(bool Resume) {
       if (unsigned InitID = Record[2])
         GlobalInits.push_back(std::make_pair(NewGV, InitID-1));
 
-      if (Record.size() > 11) {
+      if (Record.size() > 11)
         if (unsigned ComdatID = Record[11]) {
           assert(ComdatID <= ComdatList.size());
           NewGV->setComdat(ComdatList[ComdatID - 1]);
         }
-      } else if (hasImplicitComdat(RawLinkage)) {
-        NewGV->setComdat(reinterpret_cast<Comdat *>(1));
-      }
       break;
     }
     // FUNCTION:  [type, callingconv, isproto, linkage, paramattr,
@@ -2255,8 +2226,7 @@ std::error_code BitcodeReader::ParseModule(bool Resume) {
 
       Func->setCallingConv(static_cast<CallingConv::ID>(Record[1]));
       bool isProto = Record[2];
-      uint64_t RawLinkage = Record[3];
-      Func->setLinkage(getDecodedLinkage(RawLinkage));
+      Func->setLinkage(getDecodedLinkage(Record[3]));
       Func->setAttributes(getAttributes(Record[4]));
 
       Func->setAlignment((1 << Record[5]) >> 1);
@@ -2284,16 +2254,13 @@ std::error_code BitcodeReader::ParseModule(bool Resume) {
       if (Record.size() > 11)
         Func->setDLLStorageClass(GetDecodedDLLStorageClass(Record[11]));
       else
-        UpgradeDLLImportExportLinkage(Func, RawLinkage);
+        UpgradeDLLImportExportLinkage(Func, Record[3]);
 
-      if (Record.size() > 12) {
+      if (Record.size() > 12)
         if (unsigned ComdatID = Record[12]) {
           assert(ComdatID <= ComdatList.size());
           Func->setComdat(ComdatList[ComdatID - 1]);
         }
-      } else if (hasImplicitComdat(RawLinkage)) {
-        Func->setComdat(reinterpret_cast<Comdat *>(1));
-      }
 
       if (Record.size() > 13 && Record[13] != 0)
         FunctionPrefixes.push_back(std::make_pair(Func, Record[13]-1));

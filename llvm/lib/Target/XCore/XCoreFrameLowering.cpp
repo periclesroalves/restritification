@@ -226,7 +226,8 @@ void XCoreFrameLowering::emitPrologue(MachineFunction &MF) const {
   MachineFrameInfo *MFI = MF.getFrameInfo();
   MachineModuleInfo *MMI = &MF.getMMI();
   const MCRegisterInfo *MRI = MMI->getContext().getRegisterInfo();
-  const XCoreInstrInfo &TII = *MF.getSubtarget<XCoreSubtarget>().getInstrInfo();
+  const XCoreInstrInfo &TII =
+      *static_cast<const XCoreInstrInfo *>(MF.getSubtarget().getInstrInfo());
   XCoreFunctionInfo *XFI = MF.getInfo<XCoreFunctionInfo>();
   // Debug location must be unknown since the first debug location is used
   // to determine the end of the prologue.
@@ -340,7 +341,8 @@ void XCoreFrameLowering::emitEpilogue(MachineFunction &MF,
                                      MachineBasicBlock &MBB) const {
   MachineFrameInfo *MFI = MF.getFrameInfo();
   MachineBasicBlock::iterator MBBI = MBB.getLastNonDebugInstr();
-  const XCoreInstrInfo &TII = *MF.getSubtarget<XCoreSubtarget>().getInstrInfo();
+  const XCoreInstrInfo &TII =
+      *static_cast<const XCoreInstrInfo *>(MF.getSubtarget().getInstrInfo());
   XCoreFunctionInfo *XFI = MF.getInfo<XCoreFunctionInfo>();
   DebugLoc dl = MBBI->getDebugLoc();
   unsigned RetOpcode = MBBI->getOpcode();
@@ -478,7 +480,8 @@ restoreCalleeSavedRegisters(MachineBasicBlock &MBB,
 void XCoreFrameLowering::
 eliminateCallFramePseudoInstr(MachineFunction &MF, MachineBasicBlock &MBB,
                               MachineBasicBlock::iterator I) const {
-  const XCoreInstrInfo &TII = *MF.getSubtarget<XCoreSubtarget>().getInstrInfo();
+  const XCoreInstrInfo &TII =
+      *static_cast<const XCoreInstrInfo *>(MF.getSubtarget().getInstrInfo());
   if (!hasReservedCallFrame(MF)) {
     // Turn the adjcallstackdown instruction into 'extsp <amt>' and the
     // adjcallstackup instruction into 'ldaw sp, sp[<amt>]'

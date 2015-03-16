@@ -15,6 +15,7 @@
 #include "llvm/Transforms/Scalar.h"
 #include "llvm/Analysis/AssumptionCache.h"
 #include "llvm/Analysis/CodeMetrics.h"
+#include "llvm/Analysis/FunctionTargetTransformInfo.h"
 #include "llvm/Analysis/LoopPass.h"
 #include "llvm/Analysis/ScalarEvolution.h"
 #include "llvm/Analysis/TargetTransformInfo.h"
@@ -104,15 +105,16 @@ namespace {
     ///
     void getAnalysisUsage(AnalysisUsage &AU) const override {
       AU.addRequired<AssumptionCacheTracker>();
-      AU.addRequired<LoopInfoWrapperPass>();
-      AU.addPreserved<LoopInfoWrapperPass>();
+      AU.addRequired<LoopInfo>();
+      AU.addPreserved<LoopInfo>();
       AU.addRequiredID(LoopSimplifyID);
       AU.addPreservedID(LoopSimplifyID);
       AU.addRequiredID(LCSSAID);
       AU.addPreservedID(LCSSAID);
       AU.addRequired<ScalarEvolution>();
       AU.addPreserved<ScalarEvolution>();
-      AU.addRequired<TargetTransformInfoWrapperPass>();
+      AU.addRequired<TargetTransformInfo>();
+      AU.addRequired<FunctionTargetTransformInfo>();
       // FIXME: Loop unroll requires LCSSA. And LCSSA requires dom info.
       // If loop unroll does not preserve dom info then LCSSA pass on next
       // loop will receive invalid dom info.
@@ -122,7 +124,7 @@ namespace {
 
     // Fill in the UnrollingPreferences parameter with values from the
     // TargetTransformationInfo.
-    void getUnrollingPreferences(Loop *L, const TargetTransformInfo &TTI,
+    void getUnrollingPreferences(Loop *L, const FunctionTargetTransformInfo &FTTI,
                                  TargetTransformInfo::UnrollingPreferences &UP) {
       UP.Threshold = CurrentThreshold;
       UP.OptSizeThreshold = OptSizeUnrollThreshold;
@@ -132,7 +134,7 @@ namespace {
       UP.MaxCount = UINT_MAX;
       UP.Partial = CurrentAllowPartial;
       UP.Runtime = CurrentRuntime;
-      TTI.getUnrollingPreferences(L, UP);
+      FTTI.getUnrollingPreferences(L, UP);
     }
 
     // Select and return an unroll count based on parameters from
@@ -183,9 +185,10 @@ namespace {
 
 char LoopUnroll::ID = 0;
 INITIALIZE_PASS_BEGIN(LoopUnroll, "loop-unroll", "Unroll loops", false, false)
-INITIALIZE_PASS_DEPENDENCY(TargetTransformInfoWrapperPass)
+INITIALIZE_AG_DEPENDENCY(TargetTransformInfo)
 INITIALIZE_PASS_DEPENDENCY(AssumptionCacheTracker)
-INITIALIZE_PASS_DEPENDENCY(LoopInfoWrapperPass)
+INITIALIZE_PASS_DEPENDENCY(FunctionTargetTransformInfo)
+INITIALIZE_PASS_DEPENDENCY(LoopInfo)
 INITIALIZE_PASS_DEPENDENCY(LoopSimplify)
 INITIALIZE_PASS_DEPENDENCY(LCSSA)
 INITIALIZE_PASS_DEPENDENCY(ScalarEvolution)
@@ -231,27 +234,44 @@ static unsigned ApproximateLoopSize(const Loop *L, unsigned &NumCalls,
 // Returns the loop hint metadata node with the given name (for example,
 // "llvm.loop.unroll.count").  If no such metadata node exists, then nullptr is
 // returned.
-static const MDNode *GetUnrollMetadataForLoop(const Loop *L, StringRef Name) {
+static const MDNode *GetUnrollMetadata(const Loop *L, StringRef Name) {
   MDNode *LoopID = L->getLoopID();
   if (!LoopID)
     return nullptr;
-  return GetUnrollMetadata(LoopID, Name);
+
+  // First operand should refer to the loop id itself.
+  assert(LoopID->getNumOperands() > 0 && "requires at least one operand");
+  assert(LoopID->getOperand(0) == LoopID && "invalid loop id");
+
+  for (unsigned i = 1, e = LoopID->getNumOperands(); i < e; ++i) {
+    const MDNode *MD = dyn_cast<MDNode>(LoopID->getOperand(i));
+    if (!MD)
+      continue;
+
+    const MDString *S = dyn_cast<MDString>(MD->getOperand(0));
+    if (!S)
+      continue;
+
+    if (Name.equals(S->getString()))
+      return MD;
+  }
+  return nullptr;
 }
 
 // Returns true if the loop has an unroll(full) pragma.
 static bool HasUnrollFullPragma(const Loop *L) {
-  return GetUnrollMetadataForLoop(L, "llvm.loop.unroll.full");
+  return GetUnrollMetadata(L, "llvm.loop.unroll.full");
 }
 
 // Returns true if the loop has an unroll(disable) pragma.
 static bool HasUnrollDisablePragma(const Loop *L) {
-  return GetUnrollMetadataForLoop(L, "llvm.loop.unroll.disable");
+  return GetUnrollMetadata(L, "llvm.loop.unroll.disable");
 }
 
 // If loop has an unroll_count pragma return the (necessarily
 // positive) value from the pragma.  Otherwise return 0.
 static unsigned UnrollCountPragmaValue(const Loop *L) {
-  const MDNode *MD = GetUnrollMetadataForLoop(L, "llvm.loop.unroll.count");
+  const MDNode *MD = GetUnrollMetadata(L, "llvm.loop.unroll.count");
   if (MD) {
     assert(MD->getNumOperands() == 2 &&
            "Unroll count hint metadata should have two operands.");
@@ -343,13 +363,13 @@ bool LoopUnroll::runOnLoop(Loop *L, LPPassManager &LPM) {
   if (skipOptnoneFunction(L))
     return false;
 
-  Function &F = *L->getHeader()->getParent();
-
-  LoopInfo *LI = &getAnalysis<LoopInfoWrapperPass>().getLoopInfo();
+  LoopInfo *LI = &getAnalysis<LoopInfo>();
   ScalarEvolution *SE = &getAnalysis<ScalarEvolution>();
-  const TargetTransformInfo &TTI =
-      getAnalysis<TargetTransformInfoWrapperPass>().getTTI(F);
-  auto &AC = getAnalysis<AssumptionCacheTracker>().getAssumptionCache(F);
+  const TargetTransformInfo &TTI = getAnalysis<TargetTransformInfo>();
+  const FunctionTargetTransformInfo &FTTI =
+      getAnalysis<FunctionTargetTransformInfo>();
+  auto &AC = getAnalysis<AssumptionCacheTracker>().getAssumptionCache(
+      *L->getHeader()->getParent());
 
   BasicBlock *Header = L->getHeader();
   DEBUG(dbgs() << "Loop Unroll: F[" << Header->getParent()->getName()
@@ -363,7 +383,7 @@ bool LoopUnroll::runOnLoop(Loop *L, LPPassManager &LPM) {
   bool HasPragma = PragmaFullUnroll || PragmaCount > 0;
 
   TargetTransformInfo::UnrollingPreferences UP;
-  getUnrollingPreferences(L, TTI, UP);
+  getUnrollingPreferences(L, FTTI, UP);
 
   // Find trip count and trip multiple if count is not available
   unsigned TripCount = 0;

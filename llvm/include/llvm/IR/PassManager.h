@@ -782,11 +782,8 @@ public:
       FAM = &AM->getResult<FunctionAnalysisManagerModuleProxy>(M).getManager();
 
     PreservedAnalyses PA = PreservedAnalyses::all();
-    for (Function &F : M) {
-      if (F.isDeclaration())
-        continue;
-
-      PreservedAnalyses PassPA = Pass.run(F, FAM);
+    for (Module::iterator I = M.begin(), E = M.end(); I != E; ++I) {
+      PreservedAnalyses PassPA = Pass.run(*I, FAM);
 
       // We know that the function pass couldn't have invalidated any other
       // function's analyses (that's the contract of a function pass), so
@@ -794,7 +791,7 @@ public:
       // update our preserved set to reflect that these have already been
       // handled.
       if (FAM)
-        PassPA = FAM->invalidate(F, std::move(PassPA));
+        PassPA = FAM->invalidate(*I, std::move(PassPA));
 
       // Then intersect the preserved set so that invalidation of module
       // analyses will eventually occur when the module pass completes.

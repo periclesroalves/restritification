@@ -50,9 +50,7 @@ void X86IntelInstPrinter::printInst(const MCInst *MI, raw_ostream &OS,
     EmitAnyX86InstComments(MI, *CommentStream, getRegisterName);
 }
 
-void X86IntelInstPrinter::printSSEAVXCC(const MCInst *MI, unsigned Op,
-                                        raw_ostream &O) {
-  int64_t Imm = MI->getOperand(Op).getImm();
+static void printSSEAVXCC(int64_t Imm, raw_ostream &O) {
   switch (Imm) {
   default: llvm_unreachable("Invalid avxcc argument!");
   case    0: O << "eq"; break;
@@ -88,6 +86,20 @@ void X86IntelInstPrinter::printSSEAVXCC(const MCInst *MI, unsigned Op,
   case 0x1e: O << "gt_oq"; break;
   case 0x1f: O << "true_us"; break;
   }
+}
+
+void X86IntelInstPrinter::printSSECC(const MCInst *MI, unsigned Op,
+                                     raw_ostream &O) {
+  int64_t Imm = MI->getOperand(Op).getImm();
+  assert((Imm & 0x7) == Imm); // Ensure valid immediate.
+  printSSEAVXCC(Imm, O);
+}
+
+void X86IntelInstPrinter::printAVXCC(const MCInst *MI, unsigned Op,
+                                     raw_ostream &O) {
+  int64_t Imm = MI->getOperand(Op).getImm();
+  assert((Imm & 0x1f) == Imm); // Ensure valid immediate.
+  printSSEAVXCC(Imm, O);
 }
 
 void X86IntelInstPrinter::printRoundingControl(const MCInst *MI, unsigned Op,
@@ -232,9 +244,4 @@ void X86IntelInstPrinter::printMemOffset(const MCInst *MI, unsigned Op,
   }
 
   O << ']';
-}
-
-void X86IntelInstPrinter::printU8Imm(const MCInst *MI, unsigned Op,
-                                     raw_ostream &O) {
-  O << formatImm(MI->getOperand(Op).getImm() & 0xff);
 }

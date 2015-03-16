@@ -1,5 +1,4 @@
 ; RUN: llc < %s -mtriple=i686-apple-darwin9 -mattr=sse4a | FileCheck %s
-; RUN: llc < %s -mtriple=x86_64-unknown-linux -mattr=sse4a | FileCheck %s
 
 define void @test1(i8* %p, <4 x float> %a) nounwind optsize ssp {
 ; CHECK-LABEL: test1:

@@ -1,4 +1,4 @@
-//===-- PPCTargetTransformInfo.cpp - PPC specific TTI ---------------------===//
+//===-- PPCTargetTransformInfo.cpp - PPC specific TTI pass ----------------===//
 //
 //                     The LLVM Compiler Infrastructure
 //
@@ -6,10 +6,17 @@
 // License. See LICENSE.TXT for details.
 //
 //===----------------------------------------------------------------------===//
+/// \file
+/// This file implements a TargetTransformInfo analysis pass specific to the
+/// PPC target machine. It uses the target's detailed information to provide
+/// more precise answers to certain TTI queries, while letting the target
+/// independent and default TTI implementations handle the rest.
+///
+//===----------------------------------------------------------------------===//
 
-#include "PPCTargetTransformInfo.h"
+#include "PPC.h"
+#include "PPCTargetMachine.h"
 #include "llvm/Analysis/TargetTransformInfo.h"
-#include "llvm/CodeGen/BasicTTIImpl.h"
 #include "llvm/Support/CommandLine.h"
 #include "llvm/Support/Debug.h"
 #include "llvm/Target/CostTable.h"
@@ -21,23 +28,115 @@ using namespace llvm;
 static cl::opt<bool> DisablePPCConstHoist("disable-ppc-constant-hoisting",
 cl::desc("disable constant hoisting on PPC"), cl::init(false), cl::Hidden);
 
+// Declare the pass initialization routine locally as target-specific passes
+// don't have a target-wide initialization entry point, and so we rely on the
+// pass constructor initialization.
+namespace llvm {
+void initializePPCTTIPass(PassRegistry &);
+}
+
+namespace {
+
+class PPCTTI final : public ImmutablePass, public TargetTransformInfo {
+  const TargetMachine *TM;
+  const PPCSubtarget *ST;
+  const PPCTargetLowering *TLI;
+
+public:
+  PPCTTI() : ImmutablePass(ID), ST(nullptr), TLI(nullptr) {
+    llvm_unreachable("This pass cannot be directly constructed");
+  }
+
+  PPCTTI(const PPCTargetMachine *TM)
+      : ImmutablePass(ID), TM(TM), ST(TM->getSubtargetImpl()),
+        TLI(TM->getSubtargetImpl()->getTargetLowering()) {
+    initializePPCTTIPass(*PassRegistry::getPassRegistry());
+  }
+
+  void initializePass() override {
+    pushTTIStack(this);
+  }
+
+  void getAnalysisUsage(AnalysisUsage &AU) const override {
+    TargetTransformInfo::getAnalysisUsage(AU);
+  }
+
+  /// Pass identification.
+  static char ID;
+
+  /// Provide necessary pointer adjustments for the two base classes.
+  void *getAdjustedAnalysisPointer(const void *ID) override {
+    if (ID == &TargetTransformInfo::ID)
+      return (TargetTransformInfo*)this;
+    return this;
+  }
+
+  /// \name Scalar TTI Implementations
+  /// @{
+  unsigned getIntImmCost(const APInt &Imm, Type *Ty) const override;
+
+  unsigned getIntImmCost(unsigned Opcode, unsigned Idx, const APInt &Imm,
+                         Type *Ty) const override;
+  unsigned getIntImmCost(Intrinsic::ID IID, unsigned Idx, const APInt &Imm,
+                         Type *Ty) const override;
+
+  PopcntSupportKind getPopcntSupport(unsigned TyWidth) const override;
+  void getUnrollingPreferences(const Function *F, Loop *L,
+                               UnrollingPreferences &UP) const override;
+
+  /// @}
+
+  /// \name Vector TTI Implementations
+  /// @{
+
+  unsigned getNumberOfRegisters(bool Vector) const override;
+  unsigned getRegisterBitWidth(bool Vector) const override;
+  unsigned getMaxInterleaveFactor() const override;
+  unsigned getArithmeticInstrCost(unsigned Opcode, Type *Ty, OperandValueKind,
+                                  OperandValueKind, OperandValueProperties,
+                                  OperandValueProperties) const override;
+  unsigned getShuffleCost(ShuffleKind Kind, Type *Tp,
+                          int Index, Type *SubTp) const override;
+  unsigned getCastInstrCost(unsigned Opcode, Type *Dst,
+                            Type *Src) const override;
+  unsigned getCmpSelInstrCost(unsigned Opcode, Type *ValTy,
+                              Type *CondTy) const override;
+  unsigned getVectorInstrCost(unsigned Opcode, Type *Val,
+                              unsigned Index) const override;
+  unsigned getMemoryOpCost(unsigned Opcode, Type *Src, unsigned Alignment,
+                           unsigned AddressSpace) const override;
+
+  /// @}
+};
+
+} // end anonymous namespace
+
+INITIALIZE_AG_PASS(PPCTTI, TargetTransformInfo, "ppctti",
+                   "PPC Target Transform Info", true, true, false)
+char PPCTTI::ID = 0;
+
+ImmutablePass *
+llvm::createPPCTargetTransformInfoPass(const PPCTargetMachine *TM) {
+  return new PPCTTI(TM);
+}
+
+
 //===----------------------------------------------------------------------===//
 //
 // PPC cost model.
 //
 //===----------------------------------------------------------------------===//
 
-TargetTransformInfo::PopcntSupportKind
-PPCTTIImpl::getPopcntSupport(unsigned TyWidth) {
+PPCTTI::PopcntSupportKind PPCTTI::getPopcntSupport(unsigned TyWidth) const {
   assert(isPowerOf2_32(TyWidth) && "Ty width must be power of 2");
   if (ST->hasPOPCNTD() && TyWidth <= 64)
-    return TTI::PSK_FastHardware;
-  return TTI::PSK_Software;
+    return PSK_FastHardware;
+  return PSK_Software;
 }
 
-unsigned PPCTTIImpl::getIntImmCost(const APInt &Imm, Type *Ty) {
+unsigned PPCTTI::getIntImmCost(const APInt &Imm, Type *Ty) const {
   if (DisablePPCConstHoist)
-    return BaseT::getIntImmCost(Imm, Ty);
+    return TargetTransformInfo::getIntImmCost(Imm, Ty);
 
   assert(Ty->isIntegerTy());
 
@@ -46,28 +145,28 @@ unsigned PPCTTIImpl::getIntImmCost(const APInt &Imm, Type *Ty) {
     return ~0U;
 
   if (Imm == 0)
-    return TTI::TCC_Free;
+    return TCC_Free;
 
   if (Imm.getBitWidth() <= 64) {
     if (isInt<16>(Imm.getSExtValue()))
-      return TTI::TCC_Basic;
+      return TCC_Basic;
 
     if (isInt<32>(Imm.getSExtValue())) {
       // A constant that can be materialized using lis.
       if ((Imm.getZExtValue() & 0xFFFF) == 0)
-        return TTI::TCC_Basic;
+        return TCC_Basic;
 
-      return 2 * TTI::TCC_Basic;
+      return 2 * TCC_Basic;
     }
   }
 
-  return 4 * TTI::TCC_Basic;
+  return 4 * TCC_Basic;
 }
 
-unsigned PPCTTIImpl::getIntImmCost(Intrinsic::ID IID, unsigned Idx,
-                                   const APInt &Imm, Type *Ty) {
+unsigned PPCTTI::getIntImmCost(Intrinsic::ID IID, unsigned Idx,
+                               const APInt &Imm, Type *Ty) const {
   if (DisablePPCConstHoist)
-    return BaseT::getIntImmCost(IID, Idx, Imm, Ty);
+    return TargetTransformInfo::getIntImmCost(IID, Idx, Imm, Ty);
 
   assert(Ty->isIntegerTy());
 
@@ -76,32 +175,31 @@ unsigned PPCTTIImpl::getIntImmCost(Intrinsic::ID IID, unsigned Idx,
     return ~0U;
 
   switch (IID) {
-  default:
-    return TTI::TCC_Free;
+  default: return TCC_Free;
   case Intrinsic::sadd_with_overflow:
   case Intrinsic::uadd_with_overflow:
   case Intrinsic::ssub_with_overflow:
   case Intrinsic::usub_with_overflow:
     if ((Idx == 1) && Imm.getBitWidth() <= 64 && isInt<16>(Imm.getSExtValue()))
-      return TTI::TCC_Free;
+      return TCC_Free;
     break;
   case Intrinsic::experimental_stackmap:
     if ((Idx < 2) || (Imm.getBitWidth() <= 64 && isInt<64>(Imm.getSExtValue())))
-      return TTI::TCC_Free;
+      return TCC_Free;
     break;
   case Intrinsic::experimental_patchpoint_void:
   case Intrinsic::experimental_patchpoint_i64:
     if ((Idx < 4) || (Imm.getBitWidth() <= 64 && isInt<64>(Imm.getSExtValue())))
-      return TTI::TCC_Free;
+      return TCC_Free;
     break;
   }
-  return PPCTTIImpl::getIntImmCost(Imm, Ty);
+  return PPCTTI::getIntImmCost(Imm, Ty);
 }
 
-unsigned PPCTTIImpl::getIntImmCost(unsigned Opcode, unsigned Idx,
-                                   const APInt &Imm, Type *Ty) {
+unsigned PPCTTI::getIntImmCost(unsigned Opcode, unsigned Idx, const APInt &Imm,
+                               Type *Ty) const {
   if (DisablePPCConstHoist)
-    return BaseT::getIntImmCost(Opcode, Idx, Imm, Ty);
+    return TargetTransformInfo::getIntImmCost(Opcode, Idx, Imm, Ty);
 
   assert(Ty->isIntegerTy());
 
@@ -113,15 +211,14 @@ unsigned PPCTTIImpl::getIntImmCost(unsigned Opcode, unsigned Idx,
   bool ShiftedFree = false, RunFree = false, UnsignedFree = false,
        ZeroFree = false;
   switch (Opcode) {
-  default:
-    return TTI::TCC_Free;
+  default: return TCC_Free;
   case Instruction::GetElementPtr:
     // Always hoist the base address of a GetElementPtr. This prevents the
     // creation of new constants for every base constant that gets constant
     // folded with the offset.
     if (Idx == 0)
-      return 2 * TTI::TCC_Basic;
-    return TTI::TCC_Free;
+      return 2 * TCC_Basic;
+    return TCC_Free;
   case Instruction::And:
     RunFree = true; // (for the rotate-and-mask instructions)
     // Fallthrough...
@@ -153,52 +250,53 @@ unsigned PPCTTIImpl::getIntImmCost(unsigned Opcode, unsigned Idx,
   }
 
   if (ZeroFree && Imm == 0)
-    return TTI::TCC_Free;
+    return TCC_Free;
 
   if (Idx == ImmIdx && Imm.getBitWidth() <= 64) {
     if (isInt<16>(Imm.getSExtValue()))
-      return TTI::TCC_Free;
+      return TCC_Free;
 
     if (RunFree) {
       if (Imm.getBitWidth() <= 32 &&
           (isShiftedMask_32(Imm.getZExtValue()) ||
            isShiftedMask_32(~Imm.getZExtValue())))
-        return TTI::TCC_Free;
+        return TCC_Free;
+
 
       if (ST->isPPC64() &&
           (isShiftedMask_64(Imm.getZExtValue()) ||
            isShiftedMask_64(~Imm.getZExtValue())))
-        return TTI::TCC_Free;
+        return TCC_Free;
     }
 
     if (UnsignedFree && isUInt<16>(Imm.getZExtValue()))
-      return TTI::TCC_Free;
+      return TCC_Free;
 
     if (ShiftedFree && (Imm.getZExtValue() & 0xFFFF) == 0)
-      return TTI::TCC_Free;
+      return TCC_Free;
   }
 
-  return PPCTTIImpl::getIntImmCost(Imm, Ty);
+  return PPCTTI::getIntImmCost(Imm, Ty);
 }
 
-void PPCTTIImpl::getUnrollingPreferences(Loop *L,
-                                         TTI::UnrollingPreferences &UP) {
-  if (ST->getDarwinDirective() == PPC::DIR_A2) {
+void PPCTTI::getUnrollingPreferences(const Function *F, Loop *L,
+                                     UnrollingPreferences &UP) const {
+  if (TM->getSubtarget<PPCSubtarget>(F).getDarwinDirective() == PPC::DIR_A2) {
     // The A2 is in-order with a deep pipeline, and concatenation unrolling
     // helps expose latency-hiding opportunities to the instruction scheduler.
     UP.Partial = UP.Runtime = true;
   }
 
-  BaseT::getUnrollingPreferences(L, UP);
+  TargetTransformInfo::getUnrollingPreferences(F, L, UP);
 }
 
-unsigned PPCTTIImpl::getNumberOfRegisters(bool Vector) {
+unsigned PPCTTI::getNumberOfRegisters(bool Vector) const {
   if (Vector && !ST->hasAltivec())
     return 0;
   return ST->hasVSX() ? 64 : 32;
 }
 
-unsigned PPCTTIImpl::getRegisterBitWidth(bool Vector) {
+unsigned PPCTTI::getRegisterBitWidth(bool Vector) const {
   if (Vector) {
     if (ST->hasAltivec()) return 128;
     return 0;
@@ -210,7 +308,7 @@ unsigned PPCTTIImpl::getRegisterBitWidth(bool Vector) {
 
 }
 
-unsigned PPCTTIImpl::getMaxInterleaveFactor() {
+unsigned PPCTTI::getMaxInterleaveFactor() const {
   unsigned Directive = ST->getDarwinDirective();
   // The 440 has no SIMD support, but floating-point instructions
   // have a 5-cycle latency, so unroll by 5x for latency hiding.
@@ -231,35 +329,35 @@ unsigned PPCTTIImpl::getMaxInterleaveFactor() {
   return 2;
 }
 
-unsigned PPCTTIImpl::getArithmeticInstrCost(
-    unsigned Opcode, Type *Ty, TTI::OperandValueKind Op1Info,
-    TTI::OperandValueKind Op2Info, TTI::OperandValueProperties Opd1PropInfo,
-    TTI::OperandValueProperties Opd2PropInfo) {
+unsigned PPCTTI::getArithmeticInstrCost(
+    unsigned Opcode, Type *Ty, OperandValueKind Op1Info,
+    OperandValueKind Op2Info, OperandValueProperties Opd1PropInfo,
+    OperandValueProperties Opd2PropInfo) const {
   assert(TLI->InstructionOpcodeToISD(Opcode) && "Invalid opcode");
 
   // Fallback to the default implementation.
-  return BaseT::getArithmeticInstrCost(Opcode, Ty, Op1Info, Op2Info,
-                                       Opd1PropInfo, Opd2PropInfo);
+  return TargetTransformInfo::getArithmeticInstrCost(
+      Opcode, Ty, Op1Info, Op2Info, Opd1PropInfo, Opd2PropInfo);
 }
 
-unsigned PPCTTIImpl::getShuffleCost(TTI::ShuffleKind Kind, Type *Tp, int Index,
-                                    Type *SubTp) {
-  return BaseT::getShuffleCost(Kind, Tp, Index, SubTp);
+unsigned PPCTTI::getShuffleCost(ShuffleKind Kind, Type *Tp, int Index,
+                                Type *SubTp) const {
+  return TargetTransformInfo::getShuffleCost(Kind, Tp, Index, SubTp);
 }
 
-unsigned PPCTTIImpl::getCastInstrCost(unsigned Opcode, Type *Dst, Type *Src) {
+unsigned PPCTTI::getCastInstrCost(unsigned Opcode, Type *Dst, Type *Src) const {
   assert(TLI->InstructionOpcodeToISD(Opcode) && "Invalid opcode");
 
-  return BaseT::getCastInstrCost(Opcode, Dst, Src);
+  return TargetTransformInfo::getCastInstrCost(Opcode, Dst, Src);
 }
 
-unsigned PPCTTIImpl::getCmpSelInstrCost(unsigned Opcode, Type *ValTy,
-                                        Type *CondTy) {
-  return BaseT::getCmpSelInstrCost(Opcode, ValTy, CondTy);
+unsigned PPCTTI::getCmpSelInstrCost(unsigned Opcode, Type *ValTy,
+                                    Type *CondTy) const {
+  return TargetTransformInfo::getCmpSelInstrCost(Opcode, ValTy, CondTy);
 }
 
-unsigned PPCTTIImpl::getVectorInstrCost(unsigned Opcode, Type *Val,
-                                        unsigned Index) {
+unsigned PPCTTI::getVectorInstrCost(unsigned Opcode, Type *Val,
+                                    unsigned Index) const {
   assert(Val->isVectorTy() && "This must be a vector type");
 
   int ISD = TLI->InstructionOpcodeToISD(Opcode);
@@ -270,7 +368,7 @@ unsigned PPCTTIImpl::getVectorInstrCost(unsigned Opcode, Type *Val,
     if (Index == 0)
       return 0;
 
-    return BaseT::getVectorInstrCost(Opcode, Val, Index);
+    return TargetTransformInfo::getVectorInstrCost(Opcode, Val, Index);
   }
 
   // Estimated cost of a load-hit-store delay.  This was obtained
@@ -287,20 +385,21 @@ unsigned PPCTTIImpl::getVectorInstrCost(unsigned Opcode, Type *Val,
   // these need to be estimated as very costly.
   if (ISD == ISD::EXTRACT_VECTOR_ELT ||
       ISD == ISD::INSERT_VECTOR_ELT)
-    return LHSPenalty + BaseT::getVectorInstrCost(Opcode, Val, Index);
+    return LHSPenalty +
+      TargetTransformInfo::getVectorInstrCost(Opcode, Val, Index);
 
-  return BaseT::getVectorInstrCost(Opcode, Val, Index);
+  return TargetTransformInfo::getVectorInstrCost(Opcode, Val, Index);
 }
 
-unsigned PPCTTIImpl::getMemoryOpCost(unsigned Opcode, Type *Src,
-                                     unsigned Alignment,
-                                     unsigned AddressSpace) {
+unsigned PPCTTI::getMemoryOpCost(unsigned Opcode, Type *Src, unsigned Alignment,
+                                 unsigned AddressSpace) const {
   // Legalize the type.
   std::pair<unsigned, MVT> LT = TLI->getTypeLegalizationCost(Src);
   assert((Opcode == Instruction::Load || Opcode == Instruction::Store) &&
          "Invalid Opcode");
 
-  unsigned Cost = BaseT::getMemoryOpCost(Opcode, Src, Alignment, AddressSpace);
+  unsigned Cost =
+    TargetTransformInfo::getMemoryOpCost(Opcode, Src, Alignment, AddressSpace);
 
   // VSX loads/stores support unaligned access.
   if (ST->hasVSX()) {

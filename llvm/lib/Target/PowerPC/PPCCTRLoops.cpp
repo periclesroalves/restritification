@@ -30,7 +30,6 @@
 #include "llvm/ADT/Statistic.h"
 #include "llvm/Analysis/LoopInfo.h"
 #include "llvm/Analysis/ScalarEvolutionExpander.h"
-#include "llvm/Analysis/TargetLibraryInfo.h"
 #include "llvm/IR/Constants.h"
 #include "llvm/IR/DerivedTypes.h"
 #include "llvm/IR/Dominators.h"
@@ -43,6 +42,7 @@
 #include "llvm/Support/CommandLine.h"
 #include "llvm/Support/Debug.h"
 #include "llvm/Support/raw_ostream.h"
+#include "llvm/Target/TargetLibraryInfo.h"
 #include "llvm/Transforms/Utils/BasicBlockUtils.h"
 #include "llvm/Transforms/Utils/Local.h"
 #include "llvm/Transforms/Utils/LoopUtils.h"
@@ -94,8 +94,8 @@ namespace {
     bool runOnFunction(Function &F) override;
 
     void getAnalysisUsage(AnalysisUsage &AU) const override {
-      AU.addRequired<LoopInfoWrapperPass>();
-      AU.addPreserved<LoopInfoWrapperPass>();
+      AU.addRequired<LoopInfo>();
+      AU.addPreserved<LoopInfo>();
       AU.addRequired<DominatorTreeWrapperPass>();
       AU.addPreserved<DominatorTreeWrapperPass>();
       AU.addRequired<ScalarEvolution>();
@@ -146,7 +146,7 @@ namespace {
 INITIALIZE_PASS_BEGIN(PPCCTRLoops, "ppc-ctr-loops", "PowerPC CTR Loops",
                       false, false)
 INITIALIZE_PASS_DEPENDENCY(DominatorTreeWrapperPass)
-INITIALIZE_PASS_DEPENDENCY(LoopInfoWrapperPass)
+INITIALIZE_PASS_DEPENDENCY(LoopInfo)
 INITIALIZE_PASS_DEPENDENCY(ScalarEvolution)
 INITIALIZE_PASS_END(PPCCTRLoops, "ppc-ctr-loops", "PowerPC CTR Loops",
                     false, false)
@@ -168,13 +168,12 @@ FunctionPass *llvm::createPPCCTRLoopsVerify() {
 #endif // NDEBUG
 
 bool PPCCTRLoops::runOnFunction(Function &F) {
-  LI = &getAnalysis<LoopInfoWrapperPass>().getLoopInfo();
+  LI = &getAnalysis<LoopInfo>();
   SE = &getAnalysis<ScalarEvolution>();
   DT = &getAnalysis<DominatorTreeWrapperPass>().getDomTree();
   DataLayoutPass *DLP = getAnalysisIfAvailable<DataLayoutPass>();
   DL = DLP ? &DLP->getDataLayout() : nullptr;
-  auto *TLIP = getAnalysisIfAvailable<TargetLibraryInfoWrapperPass>();
-  LibInfo = TLIP ? &TLIP->getTLI() : nullptr;
+  LibInfo = getAnalysisIfAvailable<TargetLibraryInfo>();
 
   bool MadeChange = false;
 
@@ -230,8 +229,7 @@ bool PPCCTRLoops::mightUseCTR(const Triple &TT, BasicBlock *BB) {
 
       if (!TM)
         return true;
-      const TargetLowering *TLI =
-          TM->getSubtargetImpl(*BB->getParent())->getTargetLowering();
+      const TargetLowering *TLI = TM->getSubtargetImpl()->getTargetLowering();
 
       if (Function *F = CI->getCalledFunction()) {
         // Most intrinsics don't become function calls, but some might.
@@ -401,8 +399,7 @@ bool PPCCTRLoops::mightUseCTR(const Triple &TT, BasicBlock *BB) {
     } else if (SwitchInst *SI = dyn_cast<SwitchInst>(J)) {
       if (!TM)
         return true;
-      const TargetLowering *TLI =
-          TM->getSubtargetImpl(*BB->getParent())->getTargetLowering();
+      const TargetLowering *TLI = TM->getSubtargetImpl()->getTargetLowering();
 
       if (SI->getNumCases() + 1 >= (unsigned)TLI->getMinimumJumpTableEntries())
         return true;

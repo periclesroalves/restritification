@@ -311,7 +311,7 @@ bool llvm::UnrollLoop(Loop *L, unsigned Count, unsigned TripCount,
       // Tell LI about New.
       if (*BB == Header) {
         assert(LI->getLoopFor(*BB) == L && "Header should not be in a sub-loop");
-        L->addBasicBlockToLoop(New, *LI);
+        L->addBasicBlockToLoop(New, LI->getBase());
       } else {
         // Figure out which loop New is in.
         const Loop *OldLoop = LI->getLoopFor(*BB);
@@ -333,7 +333,7 @@ bool llvm::UnrollLoop(Loop *L, unsigned Count, unsigned TripCount,
           if (SE)
             SE->forgetLoop(OldLoop);
         }
-        NewLoop->addBasicBlockToLoop(New, *LI);
+        NewLoop->addBasicBlockToLoop(New, LI->getBase());
       }
 
       if (*BB == Header)
@@ -548,26 +548,4 @@ bool llvm::UnrollLoop(Loop *L, unsigned Count, unsigned TripCount,
   }
 
   return true;
-}
-
-/// Given an llvm.loop loop id metadata node, returns the loop hint metadata
-/// node with the given name (for example, "llvm.loop.unroll.count"). If no
-/// such metadata node exists, then nullptr is returned.
-const MDNode *llvm::GetUnrollMetadata(const MDNode *LoopID, StringRef Name) {
-  // First operand should refer to the loop id itself.
-  assert(LoopID->getNumOperands() > 0 && "requires at least one operand");
-
-  for (unsigned i = 1, e = LoopID->getNumOperands(); i < e; ++i) {
-    const MDNode *MD = dyn_cast<MDNode>(LoopID->getOperand(i));
-    if (!MD)
-      continue;
-
-    const MDString *S = dyn_cast<MDString>(MD->getOperand(0));
-    if (!S)
-      continue;
-
-    if (Name.equals(S->getString()))
-      return MD;
-  }
-  return nullptr;
 }

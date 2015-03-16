@@ -223,8 +223,8 @@ void PassRegistrationListener::enumeratePasses() {
   PassRegistry::getPassRegistry()->enumerateWith(this);
 }
 
-PassNameParser::PassNameParser(cl::Option &O)
-    : cl::parser<const PassInfo *>(O) {
+PassNameParser::PassNameParser()
+    : Opt(nullptr) {
   PassRegistry::getPassRegistry()->addRegistrationListener(this);
 }
 

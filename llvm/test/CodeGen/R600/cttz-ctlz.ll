@@ -1,5 +1,4 @@
 ; RUN: opt -S -codegenprepare -mtriple=r600-unknown-unknown -mcpu=SI < %s | FileCheck -check-prefix=SI -check-prefix=ALL %s
-; RUN: opt -S -codegenprepare -mtriple=r600-unknown-unknown -mcpu=tonga < %s | FileCheck -check-prefix=SI -check-prefix=ALL %s
 
 
 define i64 @test1(i64 %A) {

@@ -920,16 +920,15 @@ relocation_iterator RuntimeDyldELF::processRelocationRef(
   SymbolRef::Type SymType = SymbolRef::ST_Unknown;
 
   // Search for the symbol in the global symbol table
-  RTDyldSymbolTable::const_iterator gsi = GlobalSymbolTable.end();
+  SymbolTableMap::const_iterator gsi = GlobalSymbolTable.end();
   if (Symbol != Obj.symbol_end()) {
     gsi = GlobalSymbolTable.find(TargetName.data());
     Symbol->getType(SymType);
   }
   if (gsi != GlobalSymbolTable.end()) {
-    const auto &SymInfo = gsi->second;
-    Value.SectionID = SymInfo.getSectionID();
-    Value.Offset = SymInfo.getOffset();
-    Value.Addend = SymInfo.getOffset() + Addend;
+    Value.SectionID = gsi->second.first;
+    Value.Offset = gsi->second.second;
+    Value.Addend = gsi->second.second + Addend;
   } else {
     switch (SymType) {
     case SymbolRef::ST_Debug: {

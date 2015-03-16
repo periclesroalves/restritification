@@ -198,8 +198,7 @@ class SystemZTargetMachine;
 
 class SystemZTargetLowering : public TargetLowering {
 public:
-  explicit SystemZTargetLowering(const TargetMachine &TM,
-                                 const SystemZSubtarget &STI);
+  explicit SystemZTargetLowering(const TargetMachine &TM);
 
   // Override TargetLowering.
   MVT getScalarShiftAmountTy(EVT LHSTy) const override {

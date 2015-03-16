@@ -14,6 +14,7 @@
 
 #include "llvm/CodeGen/Passes.h"
 #include "llvm/Analysis/Passes.h"
+#include "llvm/CodeGen/GCStrategy.h"
 #include "llvm/CodeGen/MachineFunctionPass.h"
 #include "llvm/CodeGen/RegAllocRegistry.h"
 #include "llvm/IR/IRPrintingPasses.h"
@@ -249,7 +250,7 @@ TargetPassConfig::TargetPassConfig(TargetMachine *tm, PassManagerBase &pm)
   substitutePass(&PostRAMachineLICMID, &MachineLICMID);
 
   // Temporarily disable experimental passes.
-  const TargetSubtargetInfo &ST = *TM->getSubtargetImpl();
+  const TargetSubtargetInfo &ST = TM->getSubtarget<TargetSubtargetInfo>();
   if (!ST.useMachineScheduler())
     disablePass(&MachineSchedulerID);
 }
@@ -419,10 +420,7 @@ void TargetPassConfig::addIRPasses() {
       addPass(createPrintFunctionPass(dbgs(), "\n\n*** Code after LSR ***\n"));
   }
 
-  // Run GC lowering passes for builtin collectors
-  // TODO: add a pass insertion point here
   addPass(createGCLoweringPass());
-  addPass(createShadowStackGCLoweringPass());
 
   // Make sure that no unreachable blocks are instruction selected.
   addPass(createUnreachableBlockEliminationPass());
@@ -450,11 +448,10 @@ void TargetPassConfig::addPassesToHandleExceptions() {
     // FALLTHROUGH
   case ExceptionHandling::DwarfCFI:
   case ExceptionHandling::ARM:
+  case ExceptionHandling::ItaniumWinEH:
     addPass(createDwarfEHPass(TM));
     break;
-  case ExceptionHandling::WinEH:
-    addPass(createWinEHPass(TM));
-    break;
+  case ExceptionHandling::MSVC: // FIXME: Add preparation.
   case ExceptionHandling::None:
     addPass(createLowerInvokePass());
 

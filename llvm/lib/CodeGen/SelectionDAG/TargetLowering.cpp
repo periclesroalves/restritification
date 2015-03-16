@@ -2340,7 +2340,7 @@ TargetLowering::AsmOperandInfoVector TargetLowering::ParseConstraints(
   }
 
   // If we have multiple alternative constraints, select the best alternative.
-  if (!ConstraintOperands.empty()) {
+  if (ConstraintOperands.size()) {
     if (maCount) {
       unsigned bestMAIndex = 0;
       int bestWeight = -1;

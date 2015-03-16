@@ -28,7 +28,6 @@ class StringRef;
 ///
 class MCSubtargetInfo {
   std::string TargetTriple;            // Target triple
-  std::string CPU; // CPU being targeted.
   ArrayRef<SubtargetFeatureKV> ProcFeatures;  // Processor feature list
   ArrayRef<SubtargetFeatureKV> ProcDesc;  // Processor descriptions
 
@@ -58,11 +57,6 @@ public:
   /// getTargetTriple - Return the target triple string.
   StringRef getTargetTriple() const {
     return TargetTriple;
-  }
-
-  /// getCPU - Return the CPU string.
-  StringRef getCPU() const {
-    return CPU;
   }
 
   /// getFeatureBits - Return the feature bits.

@@ -514,7 +514,7 @@ void RecognizableInstr::emitInstructionSpecifier() {
   assert(numOperands <= X86_MAX_OPERANDS && "X86_MAX_OPERANDS is not large enough");
 
   for (unsigned operandIndex = 0; operandIndex < numOperands; ++operandIndex) {
-    if (!OperandList[operandIndex].Constraints.empty()) {
+    if (OperandList[operandIndex].Constraints.size()) {
       const CGIOperandList::ConstraintInfo &Constraint =
         OperandList[operandIndex].Constraints[0];
       if (Constraint.isTied()) {
@@ -932,8 +932,6 @@ OperandType RecognizableInstr::typeFromString(const std::string &s,
   TYPE("GR64",                TYPE_R64)
   TYPE("i8mem",               TYPE_M8)
   TYPE("i8imm",               TYPE_IMM8)
-  TYPE("u8imm",               TYPE_UIMM8)
-  TYPE("i32u8imm",            TYPE_UIMM8)
   TYPE("GR8",                 TYPE_R8)
   TYPE("VR128",               TYPE_XMM128)
   TYPE("VR128X",              TYPE_XMM128)
@@ -957,7 +955,6 @@ OperandType RecognizableInstr::typeFromString(const std::string &s,
   TYPE("i32imm_pcrel",        TYPE_REL32)
   TYPE("SSECC",               TYPE_IMM3)
   TYPE("AVXCC",               TYPE_IMM5)
-  TYPE("AVX512ICC",           TYPE_AVX512ICC)
   TYPE("AVX512RC",            TYPE_IMM32)
   TYPE("brtarget32",          TYPE_RELv)
   TYPE("brtarget16",          TYPE_RELv)
@@ -1038,7 +1035,6 @@ RecognizableInstr::immediateEncodingFromString(const std::string &s,
   ENCODING("i32i8imm",        ENCODING_IB)
   ENCODING("SSECC",           ENCODING_IB)
   ENCODING("AVXCC",           ENCODING_IB)
-  ENCODING("AVX512ICC",       ENCODING_IB)
   ENCODING("AVX512RC",        ENCODING_IB)
   ENCODING("i16imm",          ENCODING_Iv)
   ENCODING("i16i8imm",        ENCODING_IB)
@@ -1046,8 +1042,6 @@ RecognizableInstr::immediateEncodingFromString(const std::string &s,
   ENCODING("i64i32imm",       ENCODING_ID)
   ENCODING("i64i8imm",        ENCODING_IB)
   ENCODING("i8imm",           ENCODING_IB)
-  ENCODING("u8imm",           ENCODING_IB)
-  ENCODING("i32u8imm",        ENCODING_IB)
   // This is not a typo.  Instructions like BLENDVPD put
   // register IDs in 8-bit immediates nowadays.
   ENCODING("FR32",            ENCODING_IB)
@@ -1216,8 +1210,6 @@ RecognizableInstr::relocationEncodingFromString(const std::string &s,
   ENCODING("i64i32imm",       ENCODING_ID)
   ENCODING("i64i8imm",        ENCODING_IB)
   ENCODING("i8imm",           ENCODING_IB)
-  ENCODING("u8imm",           ENCODING_IB)
-  ENCODING("i32u8imm",        ENCODING_IB)
   ENCODING("i64i32imm_pcrel", ENCODING_ID)
   ENCODING("i16imm_pcrel",    ENCODING_IW)
   ENCODING("i32imm_pcrel",    ENCODING_ID)

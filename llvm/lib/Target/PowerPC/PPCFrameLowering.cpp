@@ -372,7 +372,7 @@ unsigned PPCFrameLowering::determineFrameLayout(MachineFunction &MF,
   unsigned AlignMask = std::max(MaxAlign, TargetAlign) - 1;
 
   const PPCRegisterInfo *RegInfo =
-      static_cast<const PPCRegisterInfo *>(Subtarget.getRegisterInfo());
+      static_cast<const PPCRegisterInfo *>(MF.getSubtarget().getRegisterInfo());
 
   // If we are a leaf function, and use up to 224 bytes of stack space,
   // don't have a frame pointer, calls, or dynamic alloca then we do not need
@@ -461,7 +461,7 @@ void PPCFrameLowering::replaceFPWithRealFP(MachineFunction &MF) const {
   unsigned FP8Reg = is31 ? PPC::X31 : PPC::X1;
 
   const PPCRegisterInfo *RegInfo =
-      static_cast<const PPCRegisterInfo *>(Subtarget.getRegisterInfo());
+      static_cast<const PPCRegisterInfo *>(MF.getSubtarget().getRegisterInfo());
   bool HasBP = RegInfo->hasBasePointer(MF);
   unsigned BPReg  = HasBP ? (unsigned) RegInfo->getBaseRegister(MF) : FPReg;
   unsigned BP8Reg = HasBP ? (unsigned) PPC::X30 : FPReg;
@@ -499,9 +499,9 @@ void PPCFrameLowering::emitPrologue(MachineFunction &MF) const {
   MachineBasicBlock::iterator MBBI = MBB.begin();
   MachineFrameInfo *MFI = MF.getFrameInfo();
   const PPCInstrInfo &TII =
-      *static_cast<const PPCInstrInfo *>(Subtarget.getInstrInfo());
+      *static_cast<const PPCInstrInfo *>(MF.getSubtarget().getInstrInfo());
   const PPCRegisterInfo *RegInfo =
-      static_cast<const PPCRegisterInfo *>(Subtarget.getRegisterInfo());
+      static_cast<const PPCRegisterInfo *>(MF.getSubtarget().getRegisterInfo());
 
   MachineModuleInfo &MMI = MF.getMMI();
   const MCRegisterInfo *MRI = MMI.getContext().getRegisterInfo();
@@ -864,9 +864,9 @@ void PPCFrameLowering::emitEpilogue(MachineFunction &MF,
   MachineBasicBlock::iterator MBBI = MBB.getLastNonDebugInstr();
   assert(MBBI != MBB.end() && "Returning block has no terminator");
   const PPCInstrInfo &TII =
-      *static_cast<const PPCInstrInfo *>(Subtarget.getInstrInfo());
+      *static_cast<const PPCInstrInfo *>(MF.getSubtarget().getInstrInfo());
   const PPCRegisterInfo *RegInfo =
-      static_cast<const PPCRegisterInfo *>(Subtarget.getRegisterInfo());
+      static_cast<const PPCRegisterInfo *>(MF.getSubtarget().getRegisterInfo());
 
   unsigned RetOpcode = MBBI->getOpcode();
   DebugLoc dl;
@@ -1126,7 +1126,7 @@ void
 PPCFrameLowering::processFunctionBeforeCalleeSavedScan(MachineFunction &MF,
                                                    RegScavenger *) const {
   const PPCRegisterInfo *RegInfo =
-      static_cast<const PPCRegisterInfo *>(Subtarget.getRegisterInfo());
+      static_cast<const PPCRegisterInfo *>(MF.getSubtarget().getRegisterInfo());
 
   //  Save and clear the LR state.
   PPCFunctionInfo *FI = MF.getInfo<PPCFunctionInfo>();
@@ -1266,7 +1266,7 @@ void PPCFrameLowering::processFunctionBeforeFrameFinalized(MachineFunction &MF,
   }
 
   PPCFunctionInfo *PFI = MF.getInfo<PPCFunctionInfo>();
-  const TargetRegisterInfo *TRI = Subtarget.getRegisterInfo();
+  const TargetRegisterInfo *TRI = MF.getSubtarget().getRegisterInfo();
 
   int64_t LowerBound = 0;
 
@@ -1310,7 +1310,7 @@ void PPCFrameLowering::processFunctionBeforeFrameFinalized(MachineFunction &MF,
   }
 
   const PPCRegisterInfo *RegInfo =
-      static_cast<const PPCRegisterInfo *>(Subtarget.getRegisterInfo());
+      static_cast<const PPCRegisterInfo *>(MF.getSubtarget().getRegisterInfo());
   if (RegInfo->hasBasePointer(MF)) {
     HasGPSaveArea = true;
 
@@ -1458,7 +1458,7 @@ PPCFrameLowering::spillCalleeSavedRegisters(MachineBasicBlock &MBB,
 
   MachineFunction *MF = MBB.getParent();
   const PPCInstrInfo &TII =
-      *static_cast<const PPCInstrInfo *>(Subtarget.getInstrInfo());
+      *static_cast<const PPCInstrInfo *>(MF->getSubtarget().getInstrInfo());
   DebugLoc DL;
   bool CRSpilled = false;
   MachineInstrBuilder CRMIB;
@@ -1519,7 +1519,8 @@ restoreCRs(bool isPPC64, bool is31,
            const std::vector<CalleeSavedInfo> &CSI, unsigned CSIIndex) {
 
   MachineFunction *MF = MBB.getParent();
-  const PPCInstrInfo &TII = *MF->getSubtarget<PPCSubtarget>().getInstrInfo();
+  const PPCInstrInfo &TII =
+      *static_cast<const PPCInstrInfo *>(MF->getSubtarget().getInstrInfo());
   DebugLoc DL;
   unsigned RestoreOp, MoveReg;
 
@@ -1551,7 +1552,8 @@ restoreCRs(bool isPPC64, bool is31,
 void PPCFrameLowering::
 eliminateCallFramePseudoInstr(MachineFunction &MF, MachineBasicBlock &MBB,
                               MachineBasicBlock::iterator I) const {
-  const TargetInstrInfo &TII = *Subtarget.getInstrInfo();
+  const PPCInstrInfo &TII =
+      *static_cast<const PPCInstrInfo *>(MF.getSubtarget().getInstrInfo());
   if (MF.getTarget().Options.GuaranteedTailCallOpt &&
       I->getOpcode() == PPC::ADJCALLSTACKUP) {
     // Add (actually subtract) back the amount the callee popped on return.
@@ -1601,7 +1603,7 @@ PPCFrameLowering::restoreCalleeSavedRegisters(MachineBasicBlock &MBB,
 
   MachineFunction *MF = MBB.getParent();
   const PPCInstrInfo &TII =
-      *static_cast<const PPCInstrInfo *>(Subtarget.getInstrInfo());
+      *static_cast<const PPCInstrInfo *>(MF->getSubtarget().getInstrInfo());
   bool CR2Spilled = false;
   bool CR3Spilled = false;
   bool CR4Spilled = false;

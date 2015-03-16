@@ -20,7 +20,6 @@ add_llvm_target(PowerPCCodeGen
   PPCInstrInfo.cpp
   PPCISelDAGToDAG.cpp
   PPCISelLowering.cpp
-  PPCEarlyReturn.cpp
   PPCFastISel.cpp
   PPCFrameLowering.cpp
   PPCMCInstLower.cpp
@@ -31,8 +30,6 @@ add_llvm_target(PowerPCCodeGen
   PPCTargetObjectFile.cpp
   PPCTargetTransformInfo.cpp
   PPCSelectionDAGInfo.cpp
-  PPCVSXCopy.cpp
-  PPCVSXFMAMutate.cpp
   )
 
 add_subdirectory(AsmParser)

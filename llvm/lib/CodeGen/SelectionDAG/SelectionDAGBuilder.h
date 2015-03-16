@@ -687,8 +687,6 @@ private:
                                CaseRecVector& WorkList,
                                const Value* SV,
                                MachineBasicBlock *SwitchBB);
-  void splitSwitchCase(CaseRec &CR, CaseItr Pivot, CaseRecVector &WorkList,
-                       const Value *SV, MachineBasicBlock *SwitchBB);
   bool handleBitTestsSwitchCase(CaseRec& CR,
                                 CaseRecVector& WorkList,
                                 const Value* SV,
@@ -715,8 +713,6 @@ public:
   void visitJumpTable(JumpTable &JT);
   void visitJumpTableHeader(JumpTable &JT, JumpTableHeader &JTH,
                             MachineBasicBlock *SwitchBB);
-  unsigned visitLandingPadClauseBB(GlobalValue *ClauseGV,
-                                   MachineBasicBlock *LPadMBB);
 
 private:
   // These all get lowered before this pass.

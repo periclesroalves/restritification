@@ -321,12 +321,6 @@ ELFState<ELFT>::writeSectionContent(Elf_Shdr &SHeader,
   SHeader.sh_size = Section.Size;
 }
 
-static bool isMips64EL(const ELFYAML::Object &Doc) {
-  return Doc.Header.Machine == ELFYAML::ELF_EM(llvm::ELF::EM_MIPS) &&
-         Doc.Header.Class == ELFYAML::ELF_ELFCLASS(ELF::ELFCLASS64) &&
-         Doc.Header.Data == ELFYAML::ELF_ELFDATA(ELF::ELFDATA2LSB);
-}
-
 template <class ELFT>
 bool
 ELFState<ELFT>::writeSectionContent(Elf_Shdr &SHeader,
@@ -357,13 +351,13 @@ ELFState<ELFT>::writeSectionContent(Elf_Shdr &SHeader,
       zero(REntry);
       REntry.r_offset = Rel.Offset;
       REntry.r_addend = Rel.Addend;
-      REntry.setSymbolAndType(SymIdx, Rel.Type, isMips64EL(Doc));
+      REntry.setSymbolAndType(SymIdx, Rel.Type);
       OS.write((const char *)&REntry, sizeof(REntry));
     } else {
       Elf_Rel REntry;
       zero(REntry);
       REntry.r_offset = Rel.Offset;
-      REntry.setSymbolAndType(SymIdx, Rel.Type, isMips64EL(Doc));
+      REntry.setSymbolAndType(SymIdx, Rel.Type);
       OS.write((const char *)&REntry, sizeof(REntry));
     }
   }

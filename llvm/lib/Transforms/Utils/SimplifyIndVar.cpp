@@ -48,15 +48,22 @@ namespace {
     Loop             *L;
     LoopInfo         *LI;
     ScalarEvolution  *SE;
+    const DataLayout *DL; // May be NULL
 
     SmallVectorImpl<WeakVH> &DeadInsts;
 
     bool Changed;
 
   public:
-    SimplifyIndvar(Loop *Loop, ScalarEvolution *SE, LoopInfo *LI,
-                   SmallVectorImpl<WeakVH> &Dead, IVUsers *IVU = nullptr)
-        : L(Loop), LI(LI), SE(SE), DeadInsts(Dead), Changed(false) {
+    SimplifyIndvar(Loop *Loop, ScalarEvolution *SE, LPPassManager *LPM,
+                   SmallVectorImpl<WeakVH> &Dead, IVUsers *IVU = nullptr) :
+      L(Loop),
+      LI(LPM->getAnalysisIfAvailable<LoopInfo>()),
+      SE(SE),
+      DeadInsts(Dead),
+      Changed(false) {
+      DataLayoutPass *DLP = LPM->getAnalysisIfAvailable<DataLayoutPass>();
+      DL = DLP ? &DLP->getDataLayout() : nullptr;
       assert(LI && "IV simplification requires LoopInfo");
     }
 
@@ -281,11 +288,14 @@ bool SimplifyIndvar::strengthenOverflowingOperation(BinaryOperator *BO,
 
   IntegerType *IT = cast<IntegerType>(IVOperand->getType());
   Value *OtherOperand = nullptr;
+  int OtherOperandIdx = -1;
   if (BO->getOperand(0) == IVOperand) {
     OtherOperand = BO->getOperand(1);
+    OtherOperandIdx = 1;
   } else {
     assert(BO->getOperand(1) == IVOperand && "only other use!");
     OtherOperand = BO->getOperand(0);
+    OtherOperandIdx = 0;
   }
 
   bool Changed = false;
@@ -555,8 +565,8 @@ void IVVisitor::anchor() { }
 bool simplifyUsersOfIV(PHINode *CurrIV, ScalarEvolution *SE, LPPassManager *LPM,
                        SmallVectorImpl<WeakVH> &Dead, IVVisitor *V)
 {
-  LoopInfo *LI = &LPM->getAnalysis<LoopInfoWrapperPass>().getLoopInfo();
-  SimplifyIndvar SIV(LI->getLoopFor(CurrIV->getParent()), SE, LI, Dead);
+  LoopInfo *LI = &LPM->getAnalysis<LoopInfo>();
+  SimplifyIndvar SIV(LI->getLoopFor(CurrIV->getParent()), SE, LPM, Dead);
   SIV.simplifyUsers(CurrIV, V);
   return SIV.hasChanged();
 }

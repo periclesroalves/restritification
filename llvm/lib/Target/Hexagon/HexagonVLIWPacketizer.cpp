@@ -264,7 +264,8 @@ bool HexagonPacketizer::runOnMachineFunction(MachineFunction &Fn) {
 
 
 static bool IsIndirectCall(MachineInstr* MI) {
-  return MI->getOpcode() == Hexagon::J2_callr;
+  return ((MI->getOpcode() == Hexagon::J2_callr) ||
+          (MI->getOpcode() == Hexagon::CALLRv3));
 }
 
 // Reserve resources for constant extender. Trigure an assertion if

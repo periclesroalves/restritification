@@ -623,7 +623,8 @@ void SplitEditor::removeBackCopies(SmallVectorImpl<VNInfo*> &Copies) {
   AssignI.setMap(RegAssign);
 
   for (unsigned i = 0, e = Copies.size(); i != e; ++i) {
-    SlotIndex Def = Copies[i]->def;
+    VNInfo *VNI = Copies[i];
+    SlotIndex Def = VNI->def;
     MachineInstr *MI = LIS.getInstructionFromIndex(Def);
     assert(MI && "No instruction for back-copy");
 
@@ -634,12 +635,13 @@ void SplitEditor::removeBackCopies(SmallVectorImpl<VNInfo*> &Copies) {
     while (!AtBegin && (--MBBI)->isDebugValue());
 
     DEBUG(dbgs() << "Removing " << Def << '\t' << *MI);
-    LIS.removeVRegDefAt(*LI, Def);
+    LI->removeValNo(VNI);
     LIS.RemoveMachineInstrFromMaps(MI);
     MI->eraseFromParent();
 
-    // Adjust RegAssign if a register assignment is killed at Def. We want to
-    // avoid calculating the live range of the source register if possible.
+    // Adjust RegAssign if a register assignment is killed at VNI->def.  We
+    // want to avoid calculating the live range of the source register if
+    // possible.
     AssignI.find(Def.getPrevSlot());
     if (!AssignI.valid() || AssignI.start() >= Def)
       continue;

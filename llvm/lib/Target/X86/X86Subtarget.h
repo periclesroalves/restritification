@@ -162,9 +162,9 @@ protected:
   /// True if unaligned 32-byte memory accesses are slow.
   bool IsUAMem32Slow;
 
-  /// HasVectorUAMem - True if SIMD operations can have unaligned memory
-  /// operands. This may require setting a feature bit in the processor.
-  bool HasVectorUAMem;
+  /// True if SSE operations can have unaligned memory operands.
+  /// This may require setting a configuration bit in the processor.
+  bool HasSSEUnalignedMem;
 
   /// HasCmpxchg16b - True if this processor has the CMPXCHG16B instruction;
   /// this is true for most x86-64 chips, but not the first AMD chips.
@@ -242,6 +242,8 @@ protected:
   InstrItineraryData InstrItins;
 
 private:
+  // Calculates type size & alignment
+  const DataLayout DL;
 
   /// StackAlignOverride - Override the stack alignment.
   unsigned StackAlignOverride;
@@ -274,6 +276,7 @@ public:
     return &TLInfo;
   }
   const X86InstrInfo *getInstrInfo() const override { return &InstrInfo; }
+  const DataLayout *getDataLayout() const override { return &DL; }
   const X86FrameLowering *getFrameLowering() const override {
     return &FrameLowering;
   }
@@ -375,7 +378,7 @@ public:
   bool isSHLDSlow() const { return IsSHLDSlow; }
   bool isUnalignedMemAccessFast() const { return IsUAMemFast; }
   bool isUnalignedMem32Slow() const { return IsUAMem32Slow; }
-  bool hasVectorUAMem() const { return HasVectorUAMem; }
+  bool hasSSEUnalignedMem() const { return HasSSEUnalignedMem; }
   bool hasCmpxchg16b() const { return HasCmpxchg16b; }
   bool useLeaForSP() const { return UseLeaForSP; }
   bool hasSlowDivide32() const { return HasSlowDivide32; }
@@ -403,7 +406,6 @@ public:
   bool isTargetFreeBSD() const { return TargetTriple.isOSFreeBSD(); }
   bool isTargetDragonFly() const { return TargetTriple.isOSDragonFly(); }
   bool isTargetSolaris() const { return TargetTriple.isOSSolaris(); }
-  bool isTargetPS4() const { return TargetTriple.isPS4(); }
 
   bool isTargetELF() const { return TargetTriple.isOSBinFormatELF(); }
   bool isTargetCOFF() const { return TargetTriple.isOSBinFormatCOFF(); }

@@ -14,7 +14,6 @@
 #include "llvm-c/TargetMachine.h"
 #include "llvm-c/Core.h"
 #include "llvm-c/Target.h"
-#include "llvm/Analysis/TargetTransformInfo.h"
 #include "llvm/IR/DataLayout.h"
 #include "llvm/IR/Module.h"
 #include "llvm/PassManager.h"
@@ -174,7 +173,7 @@ char* LLVMGetTargetMachineFeatureString(LLVMTargetMachineRef T) {
 }
 
 LLVMTargetDataRef LLVMGetTargetMachineData(LLVMTargetMachineRef T) {
-  return wrap(unwrap(T)->getDataLayout());
+  return wrap(unwrap(T)->getSubtargetImpl()->getDataLayout());
 }
 
 void LLVMSetTargetMachineAsmVerbosity(LLVMTargetMachineRef T,
@@ -191,7 +190,7 @@ static LLVMBool LLVMTargetMachineEmit(LLVMTargetMachineRef T, LLVMModuleRef M,
 
   std::string error;
 
-  const DataLayout *td = TM->getDataLayout();
+  const DataLayout *td = TM->getSubtargetImpl()->getDataLayout();
 
   if (!td) {
     error = "No DataLayout in TargetMachine";
@@ -256,6 +255,5 @@ char *LLVMGetDefaultTargetTriple(void) {
 }
 
 void LLVMAddAnalysisPasses(LLVMTargetMachineRef T, LLVMPassManagerRef PM) {
-  unwrap(PM)->add(
-      createTargetTransformInfoWrapperPass(unwrap(T)->getTargetIRAnalysis()));
+  unwrap(T)->addAnalysisPasses(*unwrap(PM));
 }

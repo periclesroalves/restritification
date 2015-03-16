@@ -304,14 +304,13 @@ class SegmentBuilder {
 public:
   /// Build a list of CoverageSegments from a sorted list of Regions.
   std::vector<CoverageSegment> buildSegments(ArrayRef<CountedRegion> Regions) {
-    const CountedRegion *PrevRegion = nullptr;
     for (const auto &Region : Regions) {
       // Pop any regions that end before this one starts.
       while (!ActiveRegions.empty() &&
              ActiveRegions.back()->endLoc() <= Region.startLoc())
         popRegion();
-      if (PrevRegion && PrevRegion->startLoc() == Region.startLoc() &&
-          PrevRegion->endLoc() == Region.endLoc()) {
+      if (Segments.size() && Segments.back().Line == Region.LineStart &&
+          Segments.back().Col == Region.ColumnStart) {
         if (Region.Kind != coverage::CounterMappingRegion::SkippedRegion)
           Segments.back().addCount(Region.ExecutionCount);
       } else {
@@ -319,7 +318,6 @@ public:
         ActiveRegions.push_back(&Region);
         startSegment(Region);
       }
-      PrevRegion = &Region;
     }
     // Pop any regions that are left in the stack.
     while (!ActiveRegions.empty())
@@ -411,7 +409,6 @@ CoverageData CoverageMapping::getCoverageForFile(StringRef Filename) {
   }
 
   sortNestedRegions(Regions.begin(), Regions.end());
-  DEBUG(dbgs() << "Emitting segments for file: " << Filename << "\n");
   FileCoverage.Segments = SegmentBuilder().buildSegments(Regions);
 
   return FileCoverage;
@@ -453,7 +450,6 @@ CoverageMapping::getCoverageForFunction(const FunctionRecord &Function) {
     }
 
   sortNestedRegions(Regions.begin(), Regions.end());
-  DEBUG(dbgs() << "Emitting segments for function: " << Function.Name << "\n");
   FunctionCoverage.Segments = SegmentBuilder().buildSegments(Regions);
 
   return FunctionCoverage;
@@ -472,8 +468,6 @@ CoverageMapping::getCoverageForExpansion(const ExpansionRecord &Expansion) {
     }
 
   sortNestedRegions(Regions.begin(), Regions.end());
-  DEBUG(dbgs() << "Emitting segments for expansion of file " << Expansion.FileID
-               << "\n");
   ExpansionCoverage.Segments = SegmentBuilder().buildSegments(Regions);
 
   return ExpansionCoverage;

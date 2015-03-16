@@ -893,7 +893,8 @@ bool AArch64ConditionalCompares::runOnMachineFunction(MachineFunction &MF) {
                << "********** Function: " << MF.getName() << '\n');
   TII = MF.getSubtarget().getInstrInfo();
   TRI = MF.getSubtarget().getRegisterInfo();
-  SchedModel = MF.getSubtarget().getSchedModel();
+  SchedModel =
+      MF.getTarget().getSubtarget<TargetSubtargetInfo>().getSchedModel();
   MRI = &MF.getRegInfo();
   DomTree = &getAnalysis<MachineDominatorTree>();
   Loops = getAnalysisIfAvailable<MachineLoopInfo>();

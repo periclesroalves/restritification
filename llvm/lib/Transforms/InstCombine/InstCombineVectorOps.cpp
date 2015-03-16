@@ -12,7 +12,7 @@
 //
 //===----------------------------------------------------------------------===//
 
-#include "InstCombineInternal.h"
+#include "InstCombine.h"
 #include "llvm/IR/PatternMatch.h"
 using namespace llvm;
 using namespace PatternMatch;

@@ -1532,7 +1532,7 @@ void DFSanVisitor::visitCallSite(CallSite CS) {
         Next = II->getNormalDest()->begin();
       } else {
         BasicBlock *NewBB =
-            SplitEdge(II->getParent(), II->getNormalDest(), &DFSF.DT);
+            SplitEdge(II->getParent(), II->getNormalDest(), &DFSF.DFS);
         Next = NewBB->begin();
       }
     } else {

@@ -1142,8 +1142,13 @@ foldMemoryOperand(ArrayRef<std::pair<MachineInstr*, unsigned> > Ops,
       continue;
     // FoldMI does not define this physreg. Remove the LI segment.
     assert(MO->isDead() && "Cannot fold physreg def");
-    SlotIndex Idx = LIS.getInstructionIndex(MI).getRegSlot();
-    LIS.removePhysRegDefAt(Reg, Idx);
+    for (MCRegUnitIterator Units(Reg, &TRI); Units.isValid(); ++Units) {
+      if (LiveRange *LR = LIS.getCachedRegUnit(*Units)) {
+        SlotIndex Idx = LIS.getInstructionIndex(MI).getRegSlot();
+        if (VNInfo *VNI = LR->getVNInfoAt(Idx))
+          LR->removeValNo(VNI);
+      }
+    }
   }
 
   LIS.ReplaceMachineInstrInMaps(MI, FoldMI);

@@ -109,14 +109,7 @@ public:
              const char *Name) const;
 
   unsigned getValueID(const Value *V) const;
-  unsigned getMetadataID(const Metadata *MD) const {
-    auto ID = getMetadataOrNullID(MD);
-    assert(ID != 0 && "Metadata not in slotcalculator!");
-    return ID - 1;
-  }
-  unsigned getMetadataOrNullID(const Metadata *MD) const {
-    return MDValueMap.lookup(MD);
-  }
+  unsigned getMetadataID(const Metadata *V) const;
 
   bool hasMDString() const { return HasMDString; }
   bool hasMDLocation() const { return HasMDLocation; }

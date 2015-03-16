@@ -1089,6 +1089,10 @@ public:
   // TargetLowering Configuration Methods - These methods should be invoked by
   // the derived class constructor to configure this object for the target.
   //
+
+  /// \brief Reset the operation actions based on target options.
+  virtual void resetOperationActions() {}
+
 protected:
   /// Specify how the target extends the result of integer and floating point
   /// boolean values from i1 to a wider type.  See getBooleanContents.
@@ -2680,7 +2684,7 @@ public:
   /// pointer.
   ///
   /// This should only be used for C_Register constraints.  On error, this
-  /// returns a register number of 0 and a null register class pointer.
+  /// returns a register number of 0 and a null register class pointer..
   virtual std::pair<unsigned, const TargetRegisterClass*>
     getRegForInlineAsmConstraint(const std::string &Constraint,
                                  MVT VT) const;

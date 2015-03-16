@@ -127,7 +127,8 @@ struct RxSBGOperands {
 };
 
 class SystemZDAGToDAGISel : public SelectionDAGISel {
-  const SystemZSubtarget *Subtarget;
+  const SystemZTargetLowering &Lowering;
+  const SystemZSubtarget &Subtarget;
 
   // Used by SystemZOperands.td to create integer constants.
   inline SDValue getImm(const SDNode *Node, uint64_t Imm) const {
@@ -139,7 +140,7 @@ class SystemZDAGToDAGISel : public SelectionDAGISel {
   }
 
   const SystemZInstrInfo *getInstrInfo() const {
-    return Subtarget->getInstrInfo();
+    return getTargetMachine().getSubtargetImpl()->getInstrInfo();
   }
 
   // Try to fold more of the base or index of AM into AM, where IsBase
@@ -314,12 +315,9 @@ class SystemZDAGToDAGISel : public SelectionDAGISel {
 
 public:
   SystemZDAGToDAGISel(SystemZTargetMachine &TM, CodeGenOpt::Level OptLevel)
-      : SelectionDAGISel(TM, OptLevel) {}
-
-  bool runOnMachineFunction(MachineFunction &MF) override {
-    Subtarget = &MF.getSubtarget<SystemZSubtarget>();
-    return SelectionDAGISel::runOnMachineFunction(MF);
-  }
+      : SelectionDAGISel(TM, OptLevel),
+        Lowering(*TM.getSubtargetImpl()->getTargetLowering()),
+        Subtarget(*TM.getSubtargetImpl()) {}
 
   // Override MachineFunctionPass.
   const char *getPassName() const override {
@@ -899,7 +897,7 @@ SDNode *SystemZDAGToDAGISel::tryRISBGZero(SDNode *N) {
 
   unsigned Opcode = SystemZ::RISBG;
   EVT OpcodeVT = MVT::i64;
-  if (VT == MVT::i32 && Subtarget->hasHighWord()) {
+  if (VT == MVT::i32 && Subtarget.hasHighWord()) {
     Opcode = SystemZ::RISBMux;
     OpcodeVT = MVT::i32;
     RISBG.Start &= 31;

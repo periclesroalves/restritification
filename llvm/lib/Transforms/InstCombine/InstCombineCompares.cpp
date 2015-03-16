@@ -11,7 +11,7 @@
 //
 //===----------------------------------------------------------------------===//
 
-#include "InstCombineInternal.h"
+#include "InstCombine.h"
 #include "llvm/ADT/APSInt.h"
 #include "llvm/ADT/Statistic.h"
 #include "llvm/Analysis/ConstantFolding.h"
@@ -24,7 +24,7 @@
 #include "llvm/IR/PatternMatch.h"
 #include "llvm/Support/CommandLine.h"
 #include "llvm/Support/Debug.h"
-#include "llvm/Analysis/TargetLibraryInfo.h"
+#include "llvm/Target/TargetLibraryInfo.h"
 
 using namespace llvm;
 using namespace PatternMatch;

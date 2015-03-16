@@ -30,6 +30,7 @@ class AArch64StorePairSuppress : public MachineFunctionPass {
   const AArch64InstrInfo *TII;
   const TargetRegisterInfo *TRI;
   const MachineRegisterInfo *MRI;
+  MachineFunction *MF;
   TargetSchedModel SchedModel;
   MachineTraceMetrics *Traces;
   MachineTraceMetrics::Ensemble *MinInstr;
@@ -114,16 +115,20 @@ bool AArch64StorePairSuppress::isNarrowFPStore(const MachineInstr &MI) {
   }
 }
 
-bool AArch64StorePairSuppress::runOnMachineFunction(MachineFunction &MF) {
-  const TargetSubtargetInfo &ST = MF.getSubtarget();
-  TII = static_cast<const AArch64InstrInfo *>(ST.getInstrInfo());
-  TRI = ST.getRegisterInfo();
-  MRI = &MF.getRegInfo();
+bool AArch64StorePairSuppress::runOnMachineFunction(MachineFunction &mf) {
+  MF = &mf;
+  TII =
+      static_cast<const AArch64InstrInfo *>(MF->getSubtarget().getInstrInfo());
+  TRI = MF->getSubtarget().getRegisterInfo();
+  MRI = &MF->getRegInfo();
+  const TargetSubtargetInfo &ST =
+      MF->getTarget().getSubtarget<TargetSubtargetInfo>();
   SchedModel.init(ST.getSchedModel(), &ST, TII);
+
   Traces = &getAnalysis<MachineTraceMetrics>();
   MinInstr = nullptr;
 
-  DEBUG(dbgs() << "*** " << getPassName() << ": " << MF.getName() << '\n');
+  DEBUG(dbgs() << "*** " << getPassName() << ": " << MF->getName() << '\n');
 
   if (!SchedModel.hasInstrSchedModel()) {
     DEBUG(dbgs() << "  Skipping pass: no machine model present.\n");
@@ -134,7 +139,7 @@ bool AArch64StorePairSuppress::runOnMachineFunction(MachineFunction &MF) {
   // precisely determine whether a store pair can be formed. But we do want to
   // filter out most situations where we can't form store pairs to avoid
   // computing trace metrics in those cases.
-  for (auto &MBB : MF) {
+  for (auto &MBB : *MF) {
     bool SuppressSTP = false;
     unsigned PrevBaseReg = 0;
     for (auto &MI : MBB) {

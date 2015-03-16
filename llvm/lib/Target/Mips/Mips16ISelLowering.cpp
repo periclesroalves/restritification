@@ -522,7 +522,8 @@ MachineBasicBlock *Mips16TargetLowering::
 emitSel16(unsigned Opc, MachineInstr *MI, MachineBasicBlock *BB) const {
   if (DontExpandCondPseudos16)
     return BB;
-  const TargetInstrInfo *TII = Subtarget.getInstrInfo();
+  const TargetInstrInfo *TII =
+      getTargetMachine().getSubtargetImpl()->getInstrInfo();
   DebugLoc DL = MI->getDebugLoc();
   // To "insert" a SELECT_CC instruction, we actually have to insert the
   // diamond control-flow pattern.  The incoming instruction knows the
@@ -579,12 +580,13 @@ emitSel16(unsigned Opc, MachineInstr *MI, MachineBasicBlock *BB) const {
   return BB;
 }
 
-MachineBasicBlock *
-Mips16TargetLowering::emitSelT16(unsigned Opc1, unsigned Opc2, MachineInstr *MI,
-                                 MachineBasicBlock *BB) const {
+MachineBasicBlock *Mips16TargetLowering::emitSelT16
+  (unsigned Opc1, unsigned Opc2,
+   MachineInstr *MI, MachineBasicBlock *BB) const {
   if (DontExpandCondPseudos16)
     return BB;
-  const TargetInstrInfo *TII = Subtarget.getInstrInfo();
+  const TargetInstrInfo *TII =
+      getTargetMachine().getSubtargetImpl()->getInstrInfo();
   DebugLoc DL = MI->getDebugLoc();
   // To "insert" a SELECT_CC instruction, we actually have to insert the
   // diamond control-flow pattern.  The incoming instruction knows the
@@ -643,13 +645,13 @@ Mips16TargetLowering::emitSelT16(unsigned Opc1, unsigned Opc2, MachineInstr *MI,
 
 }
 
-MachineBasicBlock *
-Mips16TargetLowering::emitSeliT16(unsigned Opc1, unsigned Opc2,
-                                  MachineInstr *MI,
-                                  MachineBasicBlock *BB) const {
+MachineBasicBlock *Mips16TargetLowering::emitSeliT16
+  (unsigned Opc1, unsigned Opc2,
+   MachineInstr *MI, MachineBasicBlock *BB) const {
   if (DontExpandCondPseudos16)
     return BB;
-  const TargetInstrInfo *TII = Subtarget.getInstrInfo();
+  const TargetInstrInfo *TII =
+      getTargetMachine().getSubtargetImpl()->getInstrInfo();
   DebugLoc DL = MI->getDebugLoc();
   // To "insert" a SELECT_CC instruction, we actually have to insert the
   // diamond control-flow pattern.  The incoming instruction knows the
@@ -708,13 +710,14 @@ Mips16TargetLowering::emitSeliT16(unsigned Opc1, unsigned Opc2,
 
 }
 
-MachineBasicBlock *
-Mips16TargetLowering::emitFEXT_T8I816_ins(unsigned BtOpc, unsigned CmpOpc,
-                                          MachineInstr *MI,
-                                          MachineBasicBlock *BB) const {
+MachineBasicBlock
+  *Mips16TargetLowering::emitFEXT_T8I816_ins(unsigned BtOpc, unsigned CmpOpc,
+                                             MachineInstr *MI,
+                                             MachineBasicBlock *BB) const {
   if (DontExpandCondPseudos16)
     return BB;
-  const TargetInstrInfo *TII = Subtarget.getInstrInfo();
+  const TargetInstrInfo *TII =
+      getTargetMachine().getSubtargetImpl()->getInstrInfo();
   unsigned regX = MI->getOperand(0).getReg();
   unsigned regY = MI->getOperand(1).getReg();
   MachineBasicBlock *target = MI->getOperand(2).getMBB();
@@ -726,11 +729,12 @@ Mips16TargetLowering::emitFEXT_T8I816_ins(unsigned BtOpc, unsigned CmpOpc,
 }
 
 MachineBasicBlock *Mips16TargetLowering::emitFEXT_T8I8I16_ins(
-    unsigned BtOpc, unsigned CmpiOpc, unsigned CmpiXOpc, bool ImmSigned,
-    MachineInstr *MI, MachineBasicBlock *BB) const {
+  unsigned BtOpc, unsigned CmpiOpc, unsigned CmpiXOpc, bool ImmSigned,
+  MachineInstr *MI,  MachineBasicBlock *BB) const {
   if (DontExpandCondPseudos16)
     return BB;
-  const TargetInstrInfo *TII = Subtarget.getInstrInfo();
+  const TargetInstrInfo *TII =
+      getTargetMachine().getSubtargetImpl()->getInstrInfo();
   unsigned regX = MI->getOperand(0).getReg();
   int64_t imm = MI->getOperand(1).getImm();
   MachineBasicBlock *target = MI->getOperand(2).getMBB();
@@ -759,12 +763,13 @@ static unsigned Mips16WhichOp8uOr16simm
     llvm_unreachable("immediate field not usable");
 }
 
-MachineBasicBlock *
-Mips16TargetLowering::emitFEXT_CCRX16_ins(unsigned SltOpc, MachineInstr *MI,
-                                          MachineBasicBlock *BB) const {
+MachineBasicBlock *Mips16TargetLowering::emitFEXT_CCRX16_ins(
+  unsigned SltOpc,
+  MachineInstr *MI,  MachineBasicBlock *BB) const {
   if (DontExpandCondPseudos16)
     return BB;
-  const TargetInstrInfo *TII = Subtarget.getInstrInfo();
+  const TargetInstrInfo *TII =
+      getTargetMachine().getSubtargetImpl()->getInstrInfo();
   unsigned CC = MI->getOperand(0).getReg();
   unsigned regX = MI->getOperand(1).getReg();
   unsigned regY = MI->getOperand(2).getReg();
@@ -776,13 +781,13 @@ Mips16TargetLowering::emitFEXT_CCRX16_ins(unsigned SltOpc, MachineInstr *MI,
   return BB;
 }
 
-MachineBasicBlock *
-Mips16TargetLowering::emitFEXT_CCRXI16_ins(unsigned SltiOpc, unsigned SltiXOpc,
-                                           MachineInstr *MI,
-                                           MachineBasicBlock *BB) const {
+MachineBasicBlock *Mips16TargetLowering::emitFEXT_CCRXI16_ins(
+  unsigned SltiOpc, unsigned SltiXOpc,
+  MachineInstr *MI,  MachineBasicBlock *BB )const {
   if (DontExpandCondPseudos16)
     return BB;
-  const TargetInstrInfo *TII = Subtarget.getInstrInfo();
+  const TargetInstrInfo *TII =
+      getTargetMachine().getSubtargetImpl()->getInstrInfo();
   unsigned CC = MI->getOperand(0).getReg();
   unsigned regX = MI->getOperand(1).getReg();
   int64_t Imm = MI->getOperand(2).getImm();

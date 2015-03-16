@@ -1556,6 +1556,8 @@ def : MipsInstAlias<"j $rs", (JR GPR32Opnd:$rs), 0>;
 let Predicates = [NotInMicroMips] in {
 def : MipsInstAlias<"jalr $rs", (JALR RA, GPR32Opnd:$rs), 0>;
 }
+def : MipsInstAlias<"jal $rs", (JALR RA, GPR32Opnd:$rs), 0>;
+def : MipsInstAlias<"jal $rd,$rs", (JALR GPR32Opnd:$rd, GPR32Opnd:$rs), 0>;
 def : MipsInstAlias<"jalr.hb $rs", (JALR_HB RA, GPR32Opnd:$rs), 1>, ISA_MIPS32;
 def : MipsInstAlias<"not $rt, $rs",
                     (NOR GPR32Opnd:$rt, GPR32Opnd:$rs, ZERO), 0>;
@@ -1580,9 +1582,7 @@ def : MipsInstAlias<"mfc0 $rt, $rd", (MFC0 GPR32Opnd:$rt, GPR32Opnd:$rd, 0), 0>;
 def : MipsInstAlias<"mtc0 $rt, $rd", (MTC0 GPR32Opnd:$rt, GPR32Opnd:$rd, 0), 0>;
 def : MipsInstAlias<"mfc2 $rt, $rd", (MFC2 GPR32Opnd:$rt, GPR32Opnd:$rd, 0), 0>;
 def : MipsInstAlias<"mtc2 $rt, $rd", (MTC2 GPR32Opnd:$rt, GPR32Opnd:$rd, 0), 0>;
-let AdditionalPredicates = [NotInMicroMips] in {
 def : MipsInstAlias<"b $offset", (BEQ ZERO, ZERO, brtarget:$offset), 0>;
-}
 def : MipsInstAlias<"bnez $rs,$offset",
                     (BNE GPR32Opnd:$rs, ZERO, brtarget:$offset), 0>;
 def : MipsInstAlias<"beqz $rs,$offset",
@@ -1645,11 +1645,6 @@ class LoadAddressImm<string instr_asm, Operand Od, RegisterOperand RO> :
   MipsAsmPseudoInst<(outs RO:$rt), (ins Od:$imm32),
                      !strconcat(instr_asm, "\t$rt, $imm32")> ;
 def LoadAddr32Imm : LoadAddressImm<"la", uimm5, GPR32Opnd>;
-
-def JalTwoReg : MipsAsmPseudoInst<(outs GPR32Opnd:$rd), (ins GPR32Opnd:$rs),
-                      "jal\t$rd, $rs"> ;
-def JalOneReg : MipsAsmPseudoInst<(outs), (ins GPR32Opnd:$rs),
-                      "jal\t$rs"> ;
 
 //===----------------------------------------------------------------------===//
 //  Arbitrary patterns that map to one or more instructions

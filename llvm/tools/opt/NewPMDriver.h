@@ -26,7 +26,6 @@
 namespace llvm {
 class LLVMContext;
 class Module;
-class TargetMachine;
 class tool_output_file;
 
 namespace opt_tool {
@@ -49,9 +48,8 @@ enum VerifierKind {
 /// file. It's interface is consequentially somewhat ad-hoc, but will go away
 /// when the transition finishes.
 bool runPassPipeline(StringRef Arg0, LLVMContext &Context, Module &M,
-                     TargetMachine *TM, tool_output_file *Out,
-                     StringRef PassPipeline, opt_tool::OutputKind OK,
-                     opt_tool::VerifierKind VK);
+                     tool_output_file *Out, StringRef PassPipeline,
+                     opt_tool::OutputKind OK, opt_tool::VerifierKind VK);
 }
 
 #endif

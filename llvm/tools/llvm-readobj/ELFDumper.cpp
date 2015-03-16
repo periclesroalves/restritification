@@ -372,10 +372,9 @@ static const EnumEntry<unsigned> ElfMachineType[] = {
 };
 
 static const EnumEntry<unsigned> ElfSymbolBindings[] = {
-  { "Local",  ELF::STB_LOCAL        },
-  { "Global", ELF::STB_GLOBAL       },
-  { "Weak",   ELF::STB_WEAK         },
-  { "Unique", ELF::STB_GNU_UNIQUE   }
+  { "Local",  ELF::STB_LOCAL  },
+  { "Global", ELF::STB_GLOBAL },
+  { "Weak",   ELF::STB_WEAK   }
 };
 
 static const EnumEntry<unsigned> ElfSymbolTypes[] = {

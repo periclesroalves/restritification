@@ -127,7 +127,7 @@ private:
   DwarfDebug *DD;
 
 protected:
-  explicit AsmPrinter(TargetMachine &TM, std::unique_ptr<MCStreamer> Streamer);
+  explicit AsmPrinter(TargetMachine &TM, MCStreamer &Streamer);
 
 public:
   virtual ~AsmPrinter();
@@ -238,6 +238,10 @@ public:
   ///
   void EmitAlignment(unsigned NumBits, const GlobalObject *GO = nullptr) const;
 
+  /// This method prints the label for the specified MachineBasicBlock, an
+  /// alignment (if present) and a comment describing it if appropriate.
+  void EmitBasicBlockStart(const MachineBasicBlock &MBB) const;
+
   /// Lower the specified LLVM Constant to an MCExpr.
   const MCExpr *lowerConstant(const Constant *CV);
 
@@ -266,12 +270,6 @@ public:
   /// Targets can override this to emit stuff after the last basic block in the
   /// function.
   virtual void EmitFunctionBodyEnd() {}
-
-  /// Targets can override this to emit stuff at the start of a basic block.
-  /// By default, this method prints the label for the specified
-  /// MachineBasicBlock, an alignment (if present) and a comment describing it
-  /// if appropriate.
-  virtual void EmitBasicBlockStart(const MachineBasicBlock &MBB) const;
 
   /// Targets can override this to emit stuff at the end of a basic block.
   virtual void EmitBasicBlockEnd(const MachineBasicBlock &MBB) {}
@@ -432,8 +430,9 @@ public:
                            unsigned PieceOffset = 0) const;
 
   /// EmitDwarfRegOp - Emit a dwarf register operation.
-  virtual void EmitDwarfRegOp(ByteStreamer &BS,
-                              const MachineLocation &MLoc) const;
+  /// \param Indirect   whether this is a register-indirect address
+  virtual void EmitDwarfRegOp(ByteStreamer &BS, const MachineLocation &MLoc,
+                              bool Indirect) const;
 
   //===------------------------------------------------------------------===//
   // Dwarf Lowering Routines

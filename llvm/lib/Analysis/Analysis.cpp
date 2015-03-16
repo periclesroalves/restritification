@@ -53,7 +53,7 @@ void llvm::initializeAnalysis(PassRegistry &Registry) {
   initializeLazyValueInfoPass(Registry);
   initializeLibCallAliasAnalysisPass(Registry);
   initializeLintPass(Registry);
-  initializeLoopInfoWrapperPassPass(Registry);
+  initializeLoopInfoPass(Registry);
   initializeMemDepPrinterPass(Registry);
   initializeMemoryDependenceAnalysisPass(Registry);
   initializeModuleDebugInfoPrinterPass(Registry);
@@ -65,7 +65,7 @@ void llvm::initializeAnalysis(PassRegistry &Registry) {
   initializeRegionOnlyPrinterPass(Registry);
   initializeScalarEvolutionPass(Registry);
   initializeScalarEvolutionAliasAnalysisPass(Registry);
-  initializeTargetTransformInfoWrapperPassPass(Registry);
+  initializeTargetTransformInfoAnalysisGroup(Registry);
   initializeTypeBasedAliasAnalysisPass(Registry);
   initializeScopedNoAliasAAPass(Registry);
 }

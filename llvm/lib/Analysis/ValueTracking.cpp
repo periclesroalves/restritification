@@ -2044,59 +2044,6 @@ bool llvm::CannotBeNegativeZero(const Value *V, unsigned Depth) {
   return false;
 }
 
-bool llvm::CannotBeOrderedLessThanZero(const Value *V, unsigned Depth) {
-  if (const ConstantFP *CFP = dyn_cast<ConstantFP>(V))
-    return !CFP->getValueAPF().isNegative() || CFP->getValueAPF().isZero();
-
-  if (Depth == 6)
-    return false;  // Limit search depth.
-
-  const Operator *I = dyn_cast<Operator>(V);
-  if (!I) return false;
-
-  switch (I->getOpcode()) {
-  default: break;
-  case Instruction::FMul:
-    // x*x is always non-negative or a NaN.
-    if (I->getOperand(0) == I->getOperand(1)) 
-      return true;
-    // Fall through
-  case Instruction::FAdd:
-  case Instruction::FDiv:
-  case Instruction::FRem:
-    return CannotBeOrderedLessThanZero(I->getOperand(0), Depth+1) &&
-           CannotBeOrderedLessThanZero(I->getOperand(1), Depth+1);
-  case Instruction::FPExt:
-  case Instruction::FPTrunc:
-    // Widening/narrowing never change sign.
-    return CannotBeOrderedLessThanZero(I->getOperand(0), Depth+1);
-  case Instruction::Call: 
-    if (const IntrinsicInst *II = dyn_cast<IntrinsicInst>(I)) 
-      switch (II->getIntrinsicID()) {
-      default: break;
-      case Intrinsic::exp:
-      case Intrinsic::exp2:
-      case Intrinsic::fabs:
-      case Intrinsic::sqrt:
-        return true;
-      case Intrinsic::powi: 
-        if (ConstantInt *CI = dyn_cast<ConstantInt>(I->getOperand(1))) {
-          // powi(x,n) is non-negative if n is even.
-          if (CI->getBitWidth() <= 64 && CI->getSExtValue() % 2u == 0)
-            return true;
-        }
-        return CannotBeOrderedLessThanZero(I->getOperand(0), Depth+1);
-      case Intrinsic::fma:
-      case Intrinsic::fmuladd:
-        // x*x+y is non-negative if y is non-negative.
-        return I->getOperand(0) == I->getOperand(1) && 
-               CannotBeOrderedLessThanZero(I->getOperand(2), Depth+1);
-      }
-    break;
-  }
-  return false; 
-}
-
 /// If the specified value can be set by repeating the same byte in memory,
 /// return the i8 value that it is represented with.  This is
 /// true for all i8 values obviously, but is also true for i32 0, i32 -1,
@@ -2620,20 +2567,20 @@ bool llvm::isSafeToSpeculativelyExecute(const Value *V,
   case Instruction::SDiv:
   case Instruction::SRem: {
     // x / y is undefined if y == 0 or x == INT_MIN and y == -1
-    const APInt *Numerator, *Denominator;
-    if (!match(Inst->getOperand(1), m_APInt(Denominator)))
-      return false;
-    // We cannot hoist this division if the denominator is 0.
-    if (*Denominator == 0)
-      return false;
-    // It's safe to hoist if the denominator is not 0 or -1.
-    if (*Denominator != -1)
-      return true;
-    // At this point we know that the denominator is -1.  It is safe to hoist as
-    // long we know that the numerator is not INT_MIN.
-    if (match(Inst->getOperand(0), m_APInt(Numerator)))
-      return !Numerator->isMinSignedValue();
-    // The numerator *might* be MinSignedValue.
+    const APInt *X, *Y;
+    if (match(Inst->getOperand(1), m_APInt(Y))) {
+      if (*Y != 0) {
+        if (*Y == -1) {
+          // The numerator can't be MinSignedValue if the denominator is -1.
+          if (match(Inst->getOperand(0), m_APInt(X)))
+            return !Y->isMinSignedValue();
+          // The numerator *might* be MinSignedValue.
+          return false;
+        }
+        // The denominator is not 0 or -1, it's safe to proceed.
+        return true;
+      }
+    }
     return false;
   }
   case Instruction::Load: {

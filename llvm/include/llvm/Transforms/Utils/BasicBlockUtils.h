@@ -23,11 +23,10 @@
 namespace llvm {
 
 class AliasAnalysis;
-class MemoryDependenceAnalysis;
 class DominatorTree;
-class LoopInfo;
 class Instruction;
 class MDNode;
+class Pass;
 class ReturnInst;
 class TargetLibraryInfo;
 class TerminatorInst;
@@ -40,8 +39,7 @@ void DeleteDeadBlock(BasicBlock *BB);
 /// any single-entry PHI nodes in it, fold them away.  This handles the case
 /// when all entries to the PHI nodes in a block are guaranteed equal, such as
 /// when the block has exactly one predecessor.
-void FoldSingleEntryPHINodes(BasicBlock *BB, AliasAnalysis *AA = nullptr,
-                             MemoryDependenceAnalysis *MemDep = nullptr);
+void FoldSingleEntryPHINodes(BasicBlock *BB, Pass *P = nullptr);
 
 /// DeleteDeadPHIs - Examine each PHI in the given block and delete it if it
 /// is dead. Also recursively delete any operands that become dead as
@@ -52,10 +50,7 @@ bool DeleteDeadPHIs(BasicBlock *BB, const TargetLibraryInfo *TLI = nullptr);
 
 /// MergeBlockIntoPredecessor - Attempts to merge a block into its predecessor,
 /// if possible.  The return value indicates success or failure.
-bool MergeBlockIntoPredecessor(BasicBlock *BB, DominatorTree *DT = nullptr,
-                               LoopInfo *LI = nullptr,
-                               AliasAnalysis *AA = nullptr,
-                               MemoryDependenceAnalysis *MemDep = nullptr);
+bool MergeBlockIntoPredecessor(BasicBlock *BB, Pass *P = nullptr);
 
 // ReplaceInstWithValue - Replace all uses of an instruction (specified by BI)
 // with a value, then remove and delete the original instruction.
@@ -75,62 +70,18 @@ void ReplaceInstWithInst(BasicBlock::InstListType &BIL,
 //
 void ReplaceInstWithInst(Instruction *From, Instruction *To);
 
-/// \brief Option class for critical edge splitting.
-///
-/// This provides a builder interface for overriding the default options used
-/// during critical edge splitting.
-struct CriticalEdgeSplittingOptions {
-  AliasAnalysis *AA;
-  DominatorTree *DT;
-  LoopInfo *LI;
-  bool MergeIdenticalEdges;
-  bool DontDeleteUselessPHIs;
-  bool PreserveLCSSA;
-
-  CriticalEdgeSplittingOptions()
-      : AA(nullptr), DT(nullptr), LI(nullptr), MergeIdenticalEdges(false),
-        DontDeleteUselessPHIs(false), PreserveLCSSA(false) {}
-
-  /// \brief Basic case of setting up all the analysis.
-  CriticalEdgeSplittingOptions(AliasAnalysis *AA, DominatorTree *DT = nullptr,
-                               LoopInfo *LI = nullptr)
-      : AA(AA), DT(DT), LI(LI), MergeIdenticalEdges(false),
-        DontDeleteUselessPHIs(false), PreserveLCSSA(false) {}
-
-  /// \brief A common pattern is to preserve the dominator tree and loop
-  /// info but not care about AA.
-  CriticalEdgeSplittingOptions(DominatorTree *DT, LoopInfo *LI)
-      : AA(nullptr), DT(DT), LI(LI), MergeIdenticalEdges(false),
-        DontDeleteUselessPHIs(false), PreserveLCSSA(false) {}
-
-  CriticalEdgeSplittingOptions &setMergeIdenticalEdges() {
-    MergeIdenticalEdges = true;
-    return *this;
-  }
-
-  CriticalEdgeSplittingOptions &setDontDeleteUselessPHIs() {
-    DontDeleteUselessPHIs = true;
-    return *this;
-  }
-
-  CriticalEdgeSplittingOptions &setPreserveLCSSA() {
-    PreserveLCSSA = true;
-    return *this;
-  }
-};
-
 /// SplitCriticalEdge - If this edge is a critical edge, insert a new node to
-/// split the critical edge.  This will update the analyses passed in through
-/// the option struct. This returns the new block if the edge was split, null
-/// otherwise.
+/// split the critical edge.  This will update DominatorTree and
+/// DominatorFrontier information if it is available, thus calling this pass
+/// will not invalidate either of them. This returns the new block if the edge
+/// was split, null otherwise.
 ///
-/// If MergeIdenticalEdges in the options struct is true (not the default),
-/// *all* edges from TI to the specified successor will be merged into the same
-/// critical edge block. This is most commonly interesting with switch
-/// instructions, which may have many edges to any one destination.  This
-/// ensures that all edges to that dest go to one block instead of each going
-/// to a different block, but isn't the standard definition of a "critical
-/// edge".
+/// If MergeIdenticalEdges is true (not the default), *all* edges from TI to the
+/// specified successor will be merged into the same critical edge block.
+/// This is most commonly interesting with switch instructions, which may
+/// have many edges to any one destination.  This ensures that all edges to that
+/// dest go to one block instead of each going to a different block, but isn't
+/// the standard definition of a "critical edge".
 ///
 /// It is invalid to call this function on a critical edge that starts at an
 /// IndirectBrInst.  Splitting these edges will almost always create an invalid
@@ -138,15 +89,14 @@ struct CriticalEdgeSplittingOptions {
 /// to.
 ///
 BasicBlock *SplitCriticalEdge(TerminatorInst *TI, unsigned SuccNum,
-                              const CriticalEdgeSplittingOptions &Options =
-                                  CriticalEdgeSplittingOptions());
+                              Pass *P = nullptr,
+                              bool MergeIdenticalEdges = false,
+                              bool DontDeleteUselessPHIs = false,
+                              bool SplitLandingPads = false);
 
-inline BasicBlock *
-SplitCriticalEdge(BasicBlock *BB, succ_iterator SI,
-                  const CriticalEdgeSplittingOptions &Options =
-                      CriticalEdgeSplittingOptions()) {
-  return SplitCriticalEdge(BB->getTerminator(), SI.getSuccessorIndex(),
-                           Options);
+inline BasicBlock *SplitCriticalEdge(BasicBlock *BB, succ_iterator SI,
+                                     Pass *P = nullptr) {
+  return SplitCriticalEdge(BB->getTerminator(), SI.getSuccessorIndex(), P);
 }
 
 /// SplitCriticalEdge - If the edge from *PI to BB is not critical, return
@@ -155,62 +105,55 @@ SplitCriticalEdge(BasicBlock *BB, succ_iterator SI,
 /// function.  If P is specified, it updates the analyses
 /// described above.
 inline bool SplitCriticalEdge(BasicBlock *Succ, pred_iterator PI,
-                              const CriticalEdgeSplittingOptions &Options =
-                                  CriticalEdgeSplittingOptions()) {
+                              Pass *P = nullptr) {
   bool MadeChange = false;
   TerminatorInst *TI = (*PI)->getTerminator();
   for (unsigned i = 0, e = TI->getNumSuccessors(); i != e; ++i)
     if (TI->getSuccessor(i) == Succ)
-      MadeChange |= !!SplitCriticalEdge(TI, i, Options);
+      MadeChange |= !!SplitCriticalEdge(TI, i, P);
   return MadeChange;
 }
 
 /// SplitCriticalEdge - If an edge from Src to Dst is critical, split the edge
 /// and return true, otherwise return false.  This method requires that there be
-/// an edge between the two blocks.  It updates the analyses
-/// passed in the options struct
-inline BasicBlock *
-SplitCriticalEdge(BasicBlock *Src, BasicBlock *Dst,
-                  const CriticalEdgeSplittingOptions &Options =
-                      CriticalEdgeSplittingOptions()) {
+/// an edge between the two blocks.  If P is specified, it updates the analyses
+/// described above.
+inline BasicBlock *SplitCriticalEdge(BasicBlock *Src, BasicBlock *Dst,
+                                     Pass *P = nullptr,
+                                     bool MergeIdenticalEdges = false,
+                                     bool DontDeleteUselessPHIs = false) {
   TerminatorInst *TI = Src->getTerminator();
   unsigned i = 0;
   while (1) {
     assert(i != TI->getNumSuccessors() && "Edge doesn't exist!");
     if (TI->getSuccessor(i) == Dst)
-      return SplitCriticalEdge(TI, i, Options);
+      return SplitCriticalEdge(TI, i, P, MergeIdenticalEdges,
+                               DontDeleteUselessPHIs);
     ++i;
   }
 }
 
 // SplitAllCriticalEdges - Loop over all of the edges in the CFG,
-// breaking critical edges as they are found.
+// breaking critical edges as they are found. Pass P must not be NULL.
 // Returns the number of broken edges.
-unsigned SplitAllCriticalEdges(Function &F,
-                               const CriticalEdgeSplittingOptions &Options =
-                                   CriticalEdgeSplittingOptions());
+unsigned SplitAllCriticalEdges(Function &F, Pass *P);
 
-/// SplitEdge -  Split the edge connecting specified block.
-BasicBlock *SplitEdge(BasicBlock *From, BasicBlock *To,
-                      DominatorTree *DT = nullptr, LoopInfo *LI = nullptr);
+/// SplitEdge -  Split the edge connecting specified block. Pass P must
+/// not be NULL.
+BasicBlock *SplitEdge(BasicBlock *From, BasicBlock *To, Pass *P);
 
 /// SplitBlock - Split the specified block at the specified instruction - every
 /// thing before SplitPt stays in Old and everything starting with SplitPt moves
 /// to a new block.  The two blocks are joined by an unconditional branch and
 /// the loop info is updated.
 ///
-BasicBlock *SplitBlock(BasicBlock *Old, Instruction *SplitPt,
-                       DominatorTree *DT = nullptr, LoopInfo *LI = nullptr);
+BasicBlock *SplitBlock(BasicBlock *Old, Instruction *SplitPt, Pass *P);
 
-/// SplitBlockPredecessors - This method introduces at least one new basic block
-/// into the function and moves some of the predecessors of BB to be
-/// predecessors of the new block. The new predecessors are indicated by the
-/// Preds array. The new block is given a suffix of 'Suffix'. Returns new basic
-/// block to which predecessors from Preds are now pointing.
-///
-/// If BB is a landingpad block then additional basicblock might be introduced.
-/// It will have Suffix+".split_lp". See SplitLandingPadPredecessors for more
-/// details on this case.
+/// SplitBlockPredecessors - This method transforms BB by introducing a new
+/// basic block into the function, and moving some of the predecessors of BB to
+/// be predecessors of the new block.  The new predecessors are indicated by the
+/// Preds array, which has NumPreds elements in it.  The new block is given a
+/// suffix of 'Suffix'.  This function returns the new block.
 ///
 /// This currently updates the LLVM IR, AliasAnalysis, DominatorTree,
 /// DominanceFrontier, LoopInfo, and LCCSA but no other analyses.
@@ -218,12 +161,8 @@ BasicBlock *SplitBlock(BasicBlock *Old, Instruction *SplitPt,
 /// complicated to handle the case where one of the edges being split
 /// is an exit of a loop with other exits).
 ///
-BasicBlock *SplitBlockPredecessors(BasicBlock *BB, ArrayRef<BasicBlock *> Preds,
-                                   const char *Suffix,
-                                   AliasAnalysis *AA = nullptr,
-                                   DominatorTree *DT = nullptr,
-                                   LoopInfo *LI = nullptr,
-                                   bool PreserveLCSSA = false);
+BasicBlock *SplitBlockPredecessors(BasicBlock *BB, ArrayRef<BasicBlock*> Preds,
+                                   const char *Suffix, Pass *P = nullptr);
 
 /// SplitLandingPadPredecessors - This method transforms the landing pad,
 /// OrigBB, by introducing two new basic blocks into the function. One of those
@@ -238,14 +177,9 @@ BasicBlock *SplitBlockPredecessors(BasicBlock *BB, ArrayRef<BasicBlock *> Preds,
 /// case where one of the edges being split is an exit of a loop with other
 /// exits).
 ///
-void SplitLandingPadPredecessors(BasicBlock *OrigBB,
-                                 ArrayRef<BasicBlock *> Preds,
+void SplitLandingPadPredecessors(BasicBlock *OrigBB,ArrayRef<BasicBlock*> Preds,
                                  const char *Suffix, const char *Suffix2,
-                                 SmallVectorImpl<BasicBlock *> &NewBBs,
-                                 AliasAnalysis *AA = nullptr,
-                                 DominatorTree *DT = nullptr,
-                                 LoopInfo *LI = nullptr,
-                                 bool PreserveLCSSA = false);
+                                 Pass *P, SmallVectorImpl<BasicBlock*> &NewBBs);
 
 /// FoldReturnIntoUncondBranch - This method duplicates the specified return
 /// instruction into a predecessor which ends in an unconditional branch. If

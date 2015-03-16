@@ -1,5 +1,4 @@
 ;RUN: llc < %s -march=amdgcn -mcpu=verde -verify-machineinstrs | FileCheck %s
-;RUN: llc < %s -march=amdgcn -mcpu=tonga -verify-machineinstrs | FileCheck %s
 
 ; Example of a simple geometry shader loading vertex attributes from the
 ; ESGS ring buffer

@@ -558,7 +558,8 @@ MCSymbol *X86AsmPrinter::GetCPISymbol(unsigned CPID) const {
     const MachineConstantPoolEntry &CPE =
         MF->getConstantPool()->getConstants()[CPID];
     if (!CPE.isMachineConstantPoolEntry()) {
-      SectionKind Kind = CPE.getSectionKind(TM.getDataLayout());
+      SectionKind Kind =
+          CPE.getSectionKind(TM.getSubtargetImpl()->getDataLayout());
       const Constant *C = CPE.Val.ConstVal;
       if (const MCSectionCOFF *S = dyn_cast<MCSectionCOFF>(
             getObjFileLowering().getSectionForConstant(Kind, C))) {
@@ -687,11 +688,11 @@ void X86AsmPrinter::EmitEndOfAsmFile(Module &M) {
     std::vector<const MCSymbol*> DLLExportedFns, DLLExportedGlobals;
 
     for (const auto &Function : M)
-      if (Function.hasDLLExportStorageClass())
+      if (Function.hasDLLExportStorageClass() && !Function.isDeclaration())
         DLLExportedFns.push_back(getSymbol(&Function));
 
     for (const auto &Global : M.globals())
-      if (Global.hasDLLExportStorageClass())
+      if (Global.hasDLLExportStorageClass() && !Global.isDeclaration())
         DLLExportedGlobals.push_back(getSymbol(&Global));
 
     for (const auto &Alias : M.aliases()) {
@@ -728,7 +729,7 @@ void X86AsmPrinter::EmitEndOfAsmFile(Module &M) {
     MachineModuleInfoELF::SymbolListTy Stubs = MMIELF.GetGVStubList();
     if (!Stubs.empty()) {
       OutStreamer.SwitchSection(TLOFELF.getDataRelSection());
-      const DataLayout *TD = TM.getDataLayout();
+      const DataLayout *TD = TM.getSubtargetImpl()->getDataLayout();
 
       for (const auto &Stub : Stubs) {
         OutStreamer.EmitLabel(Stub.first);

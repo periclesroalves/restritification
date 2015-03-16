@@ -11,7 +11,6 @@
 //
 //===----------------------------------------------------------------------===//
 
-#include "llvm/CodeGen/GCStrategy.h"
 #include "llvm/CodeGen/SelectionDAGISel.h"
 #include "ScheduleDAGSDNodes.h"
 #include "SelectionDAGBuilder.h"
@@ -20,11 +19,10 @@
 #include "llvm/Analysis/AliasAnalysis.h"
 #include "llvm/Analysis/BranchProbabilityInfo.h"
 #include "llvm/Analysis/CFG.h"
-#include "llvm/Analysis/TargetLibraryInfo.h"
-#include "llvm/CodeGen/Analysis.h"
 #include "llvm/CodeGen/FastISel.h"
 #include "llvm/CodeGen/FunctionLoweringInfo.h"
 #include "llvm/CodeGen/GCMetadata.h"
+#include "llvm/CodeGen/GCStrategy.h"
 #include "llvm/CodeGen/MachineFrameInfo.h"
 #include "llvm/CodeGen/MachineFunction.h"
 #include "llvm/CodeGen/MachineInstrBuilder.h"
@@ -42,7 +40,6 @@
 #include "llvm/IR/Intrinsics.h"
 #include "llvm/IR/LLVMContext.h"
 #include "llvm/IR/Module.h"
-#include "llvm/MC/MCAsmInfo.h"
 #include "llvm/Support/Compiler.h"
 #include "llvm/Support/Debug.h"
 #include "llvm/Support/ErrorHandling.h"
@@ -50,6 +47,7 @@
 #include "llvm/Support/raw_ostream.h"
 #include "llvm/Target/TargetInstrInfo.h"
 #include "llvm/Target/TargetIntrinsicInfo.h"
+#include "llvm/Target/TargetLibraryInfo.h"
 #include "llvm/Target/TargetLowering.h"
 #include "llvm/Target/TargetMachine.h"
 #include "llvm/Target/TargetOptions.h"
@@ -351,8 +349,7 @@ SelectionDAGISel::SelectionDAGISel(TargetMachine &tm,
     initializeGCModuleInfoPass(*PassRegistry::getPassRegistry());
     initializeAliasAnalysisAnalysisGroup(*PassRegistry::getPassRegistry());
     initializeBranchProbabilityInfoPass(*PassRegistry::getPassRegistry());
-    initializeTargetLibraryInfoWrapperPassPass(
-        *PassRegistry::getPassRegistry());
+    initializeTargetLibraryInfoPass(*PassRegistry::getPassRegistry());
   }
 
 SelectionDAGISel::~SelectionDAGISel() {
@@ -366,7 +363,7 @@ void SelectionDAGISel::getAnalysisUsage(AnalysisUsage &AU) const {
   AU.addPreserved<AliasAnalysis>();
   AU.addRequired<GCModuleInfo>();
   AU.addPreserved<GCModuleInfo>();
-  AU.addRequired<TargetLibraryInfoWrapperPass>();
+  AU.addRequired<TargetLibraryInfo>();
   if (UseMBPI && OptLevel != CodeGenOpt::None)
     AU.addRequired<BranchProbabilityInfo>();
   MachineFunctionPass::getAnalysisUsage(AU);
@@ -379,7 +376,7 @@ void SelectionDAGISel::getAnalysisUsage(AnalysisUsage &AU) const {
 ///
 /// This is required for correctness, so it must be done at -O0.
 ///
-static void SplitCriticalSideEffectEdges(Function &Fn, AliasAnalysis *AA) {
+static void SplitCriticalSideEffectEdges(Function &Fn, Pass *SDISel) {
   // Loop for blocks with phi nodes.
   for (Function::iterator BB = Fn.begin(), E = Fn.end(); BB != E; ++BB) {
     PHINode *PN = dyn_cast<PHINode>(BB->begin());
@@ -403,9 +400,8 @@ static void SplitCriticalSideEffectEdges(Function &Fn, AliasAnalysis *AA) {
           continue;
 
         // Okay, we have to split this edge.
-        SplitCriticalEdge(
-            Pred->getTerminator(), GetSuccessorNumber(Pred, BB),
-            CriticalEdgeSplittingOptions(AA).setMergeIdenticalEdges());
+        SplitCriticalEdge(Pred->getTerminator(),
+                          GetSuccessorNumber(Pred, BB), SDISel, true);
         goto ReprocessBlock;
       }
   }
@@ -437,12 +433,12 @@ bool SelectionDAGISel::runOnMachineFunction(MachineFunction &mf) {
   TLI = MF->getSubtarget().getTargetLowering();
   RegInfo = &MF->getRegInfo();
   AA = &getAnalysis<AliasAnalysis>();
-  LibInfo = &getAnalysis<TargetLibraryInfoWrapperPass>().getTLI();
+  LibInfo = &getAnalysis<TargetLibraryInfo>();
   GFI = Fn.hasGC() ? &getAnalysis<GCModuleInfo>().getFunctionInfo(Fn) : nullptr;
 
   DEBUG(dbgs() << "\n\n\n=== " << Fn.getName() << "\n");
 
-  SplitCriticalSideEffectEdges(const_cast<Function&>(Fn), AA);
+  SplitCriticalSideEffectEdges(const_cast<Function&>(Fn), this);
 
   CurDAG->init(*MF);
   FuncInfo->set(Fn, *MF, CurDAG);
@@ -660,7 +656,7 @@ void SelectionDAGISel::CodeGenAndEmitDAG() {
   (void)BlockNumber;
   bool MatchFilterBB = false; (void)MatchFilterBB;
 #ifndef NDEBUG
-  MatchFilterBB = (FilterDAGBasicBlockName.empty() ||
+  MatchFilterBB = (!FilterDAGBasicBlockName.empty() &&
                    FilterDAGBasicBlockName ==
                        FuncInfo->MBB->getBasicBlock()->getName().str());
 #endif
@@ -911,8 +907,6 @@ void SelectionDAGISel::DoInstructionSelection() {
 void SelectionDAGISel::PrepareEHLandingPad() {
   MachineBasicBlock *MBB = FuncInfo->MBB;
 
-  const TargetRegisterClass *PtrRC = TLI->getRegClassFor(TLI->getPointerTy());
-
   // Add a label to mark the beginning of the landing pad.  Deletion of the
   // landing pad can thus be detected via the MachineModuleInfo.
   MCSymbol *Label = MF->getMMI().addLandingPad(MBB);
@@ -924,73 +918,8 @@ void SelectionDAGISel::PrepareEHLandingPad() {
   BuildMI(*MBB, FuncInfo->InsertPt, SDB->getCurDebugLoc(), II)
     .addSym(Label);
 
-  // If this is an MSVC-style personality function, we need to split the landing
-  // pad into several BBs.
-  const BasicBlock *LLVMBB = MBB->getBasicBlock();
-  const LandingPadInst *LPadInst = LLVMBB->getLandingPadInst();
-  MF->getMMI().addPersonality(
-      MBB, cast<Function>(LPadInst->getPersonalityFn()->stripPointerCasts()));
-  if (MF->getMMI().getPersonalityType() == EHPersonality::Win64SEH) {
-    // Make virtual registers and a series of labels that fill in values for the
-    // clauses.
-    auto &RI = MF->getRegInfo();
-    FuncInfo->ExceptionSelectorVirtReg = RI.createVirtualRegister(PtrRC);
-
-    // Get all invoke BBs that will unwind into the clause BBs.
-    SmallVector<MachineBasicBlock *, 4> InvokeBBs(MBB->pred_begin(),
-                                                  MBB->pred_end());
-
-    // Emit separate machine basic blocks with separate labels for each clause
-    // before the main landing pad block.
-    MachineInstrBuilder SelectorPHI = BuildMI(
-        *MBB, MBB->begin(), SDB->getCurDebugLoc(), TII->get(TargetOpcode::PHI),
-        FuncInfo->ExceptionSelectorVirtReg);
-    for (unsigned I = 0, E = LPadInst->getNumClauses(); I != E; ++I) {
-      // Skip filter clauses, we can't implement them yet.
-      if (LPadInst->isFilter(I))
-        continue;
-
-      MachineBasicBlock *ClauseBB = MF->CreateMachineBasicBlock(LLVMBB);
-      MF->insert(MBB, ClauseBB);
-
-      // Add the edge from the invoke to the clause.
-      for (MachineBasicBlock *InvokeBB : InvokeBBs)
-        InvokeBB->addSuccessor(ClauseBB);
-
-      // Mark the clause as a landing pad or MI passes will delete it.
-      ClauseBB->setIsLandingPad();
-
-      GlobalValue *ClauseGV = ExtractTypeInfo(LPadInst->getClause(I));
-
-      // Start the BB with a label.
-      MCSymbol *ClauseLabel = MF->getMMI().addClauseForLandingPad(MBB);
-      BuildMI(*ClauseBB, ClauseBB->begin(), SDB->getCurDebugLoc(), II)
-          .addSym(ClauseLabel);
-
-      // Construct a simple BB that defines a register with the typeid constant.
-      FuncInfo->MBB = ClauseBB;
-      FuncInfo->InsertPt = ClauseBB->end();
-      unsigned VReg = SDB->visitLandingPadClauseBB(ClauseGV, MBB);
-      CurDAG->setRoot(SDB->getRoot());
-      SDB->clear();
-      CodeGenAndEmitDAG();
-
-      // Add the typeid virtual register to the phi in the main landing pad.
-      SelectorPHI.addReg(VReg).addMBB(ClauseBB);
-    }
-
-    // Remove the edge from the invoke to the lpad.
-    for (MachineBasicBlock *InvokeBB : InvokeBBs)
-      InvokeBB->removeSuccessor(MBB);
-
-    // Restore FuncInfo back to its previous state and select the main landing
-    // pad block.
-    FuncInfo->MBB = MBB;
-    FuncInfo->InsertPt = MBB->end();
-    return;
-  }
-
   // Mark exception register as live in.
+  const TargetRegisterClass *PtrRC = TLI->getRegClassFor(TLI->getPointerTy());
   if (unsigned Reg = TLI->getExceptionPointerRegister())
     FuncInfo->ExceptionPointerVirtReg = MBB->addLiveIn(Reg, PtrRC);
 

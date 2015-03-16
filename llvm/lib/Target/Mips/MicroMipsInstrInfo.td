@@ -3,7 +3,6 @@ def addrimm12 : ComplexPattern<iPTR, 2, "selectIntAddrMM", [frameindex]>;
 def simm4 : Operand<i32> {
   let DecoderMethod = "DecodeSimm4";
 }
-def simm7 : Operand<i32>;
 def li_simm7 : Operand<i32> {
   let DecoderMethod = "DecodeLiSimm7";
 }
@@ -97,13 +96,6 @@ def mem_mm_sp_imm5_lsl2 : Operand<i32> {
   let EncoderMethod = "getMemEncodingMMSPImm5Lsl2";
 }
 
-def mem_mm_gp_imm7_lsl2 : Operand<i32> {
-  let PrintMethod = "printMemOperand";
-  let MIOperandInfo = (ops GPRMM16:$base, simm7:$offset);
-  let OperandType = "OPERAND_MEMORY";
-  let EncoderMethod = "getMemEncodingMMGPImm7Lsl2";
-}
-
 def mem_mm_12 : Operand<i32> {
   let PrintMethod = "printMemOperand";
   let MIOperandInfo = (ops GPR32, simm12);
@@ -143,23 +135,10 @@ def brtarget7_mm : Operand<OtherVT> {
   let ParserMatchClass = MipsJumpTargetAsmOperand;
 }
 
-def brtarget10_mm : Operand<OtherVT> {
-  let EncoderMethod = "getBranchTargetOpValueMMPC10";
-  let OperandType   = "OPERAND_PCREL";
-  let DecoderMethod = "DecodeBranchTarget10MM";
-  let ParserMatchClass = MipsJumpTargetAsmOperand;
-}
-
 def brtarget_mm : Operand<OtherVT> {
   let EncoderMethod = "getBranchTargetOpValueMM";
   let OperandType   = "OPERAND_PCREL";
   let DecoderMethod = "DecodeBranchTargetMM";
-  let ParserMatchClass = MipsJumpTargetAsmOperand;
-}
-
-def simm23_lsl2 : Operand<i32> {
-  let EncoderMethod = "getSimm23Lsl2Encoding";
-  let DecoderMethod = "DecodeSimm23Lsl2";
 }
 
 class CompactBranchMM<string opstr, DAGOperand opnd, PatFrag cond_op,
@@ -315,15 +294,6 @@ class StoreSPMM16<string opstr, DAGOperand RO, InstrItinClass Itin,
   let mayStore = 1;
 }
 
-class LoadGPMM16<string opstr, DAGOperand RO, InstrItinClass Itin,
-                 Operand MemOpnd> :
-  MicroMipsInst16<(outs RO:$rt), (ins MemOpnd:$offset),
-                  !strconcat(opstr, "\t$rt, $offset"), [], Itin, FrmI> {
-  let DecoderMethod = "DecodeMemMMGPImm7Lsl2";
-  let canFoldAsLoad = 1;
-  let mayLoad = 1;
-}
-
 class AddImmUR2<string opstr, RegisterOperand RO> :
   MicroMipsInst16<(outs RO:$rd), (ins RO:$rs, simm3_lsa2:$imm),
                   !strconcat(opstr, "\t$rd, $rs, $imm"),
@@ -452,10 +422,6 @@ class LoadWordIndexedScaledMM<string opstr, RegisterOperand RO,
   InstSE<(outs RO:$rd), (ins PtrRC:$base, PtrRC:$index),
          !strconcat(opstr, "\t$rd, ${index}(${base})"), [], Itin, FrmFI>;
 
-class AddImmUPC<string opstr, RegisterOperand RO> :
-  InstSE<(outs RO:$rs), (ins simm23_lsl2:$imm),
-         !strconcat(opstr, "\t$rs, $imm"), [], NoItinerary, FrmR>;
-
 /// A list of registers used by load/store multiple instructions.
 def RegListAsmOperand : AsmOperandClass {
   let Name = "RegList";
@@ -515,18 +481,6 @@ class LoadMultMM16<string opstr,
   let mayLoad = 1;
 }
 
-class UncondBranchMM16<string opstr> :
-  MicroMipsInst16<(outs), (ins brtarget10_mm:$offset),
-                  !strconcat(opstr, "\t$offset"),
-                  [], IIBranch, FrmI> {
-  let isBranch = 1;
-  let isTerminator = 1;
-  let isBarrier = 1;
-  let hasDelaySlot = 1;
-  let Predicates = [RelocPIC, InMicroMips];
-  let Defs = [AT];
-}
-
 def ADDU16_MM : ArithRMM16<"addu16", GPRMM16Opnd, 1, II_ADDU, add>,
                 ARITH_FM_MM16<0>;
 def SUBU16_MM : ArithRMM16<"subu16", GPRMM16Opnd, 0, II_SUBU, sub>,
@@ -556,8 +510,6 @@ def SH16_MM : StoreMM16<"sh16", GPRMM16OpndZero, GPRMM16Opnd, truncstorei16,
                         LOAD_STORE_FM_MM16<0x2a>;
 def SW16_MM : StoreMM16<"sw16", GPRMM16OpndZero, GPRMM16Opnd, store, II_SW,
                         mem_mm_4_lsl2>, LOAD_STORE_FM_MM16<0x3a>;
-def LWGP_MM : LoadGPMM16<"lw", GPRMM16Opnd, II_LW, mem_mm_gp_imm7_lsl2>,
-                         LOAD_GP_FM_MM16<0x19>;
 def LWSP_MM : LoadSPMM16<"lw", GPR32Opnd, II_LW, mem_mm_sp_imm5_lsl2>,
               LOAD_STORE_SP_FM_MM16<0x12>;
 def SWSP_MM : StoreSPMM16<"sw", GPR32Opnd, II_SW, mem_mm_sp_imm5_lsl2>,
@@ -580,7 +532,6 @@ def BEQZ16_MM : CBranchZeroMM<"beqz16", brtarget7_mm, GPRMM16Opnd>,
                 BEQNEZ_FM_MM16<0x23>;
 def BNEZ16_MM : CBranchZeroMM<"bnez16", brtarget7_mm, GPRMM16Opnd>,
                 BEQNEZ_FM_MM16<0x2b>;
-def B16_MM : UncondBranchMM16<"b16">, B16_FM;
 def BREAK16_MM : BrkSdbbp16MM<"break16">, BRKSDBBP16_FM_MM<0x28>;
 def SDBBP16_MM : BrkSdbbp16MM<"sdbbp16">, BRKSDBBP16_FM_MM<0x2C>;
 
@@ -640,9 +591,6 @@ let DecoderNamespace = "MicroMips", Predicates = [InMicroMips] in {
   def UDIV_MM  : MMRel, Div<"divu", II_DIVU, GPR32Opnd, [HI0, LO0]>,
                  MULT_FM_MM<0x2ec>;
 
-  /// Arithmetic Instructions with PC and Immediate
-  def ADDIUPC_MM : AddImmUPC<"addiupc", GPRMM16Opnd>, ADDIUPC_FM_MM;
-
   /// Shift Instructions
   def SLL_MM   : MMRel, shift_rotate_imm<"sll", uimm5, GPR32Opnd, II_SLL>,
                  SRA_FM_MM<0, 0>;
@@ -696,19 +644,6 @@ let DecoderNamespace = "MicroMips", Predicates = [InMicroMips] in {
   /// Load and Store Pair Instructions
   def SWP_MM  : StorePairMM<"swp">, LWM_FM_MM<0x9>;
   def LWP_MM  : LoadPairMM<"lwp">, LWM_FM_MM<0x1>;
-
-  /// Load and Store multiple pseudo Instructions
-  class LoadWordMultMM<string instr_asm > :
-    MipsAsmPseudoInst<(outs reglist:$rt), (ins mem_mm_12:$addr),
-                      !strconcat(instr_asm, "\t$rt, $addr")> ;
-
-  class StoreWordMultMM<string instr_asm > :
-    MipsAsmPseudoInst<(outs), (ins reglist:$rt, mem_mm_12:$addr),
-                      !strconcat(instr_asm, "\t$rt, $addr")> ;
-
-
-  def SWM_MM  : StoreWordMultMM<"swm">;
-  def LWM_MM  : LoadWordMultMM<"lwm">;
 
   /// Move Conditional
   def MOVZ_I_MM : MMRel, CMov_I_I_FT<"movz", GPR32Opnd, GPR32Opnd,
@@ -882,12 +817,6 @@ def : MipsPat<(srl GPR32:$src, immZExt5:$imm),
 //===----------------------------------------------------------------------===//
 // MicroMips instruction aliases
 //===----------------------------------------------------------------------===//
-
-class UncondBranchMMPseudo<string opstr> :
-  MipsAsmPseudoInst<(outs), (ins brtarget_mm:$offset),
-                    !strconcat(opstr, "\t$offset")>;
-
-  def B_MM_Pseudo : UncondBranchMMPseudo<"b">;
 
   def : MipsInstAlias<"wait", (WAIT_MM 0x0), 1>;
   def : MipsInstAlias<"nop", (SLL_MM ZERO, ZERO, 0), 1>;

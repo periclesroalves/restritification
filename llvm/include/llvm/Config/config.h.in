@@ -420,9 +420,6 @@
 /* Have host's __chkstk */
 #undef HAVE___CHKSTK
 
-/* Have host's __chkstk_ms */
-#undef HAVE___CHKSTK_MS
-
 /* Have host's __cmpdi2 */
 #undef HAVE___CMPDI2
 
@@ -458,9 +455,6 @@
 
 /* Have host's ___chkstk */
 #undef HAVE____CHKSTK
-
-/* Have host's ___chkstk_ms */
-#undef HAVE____CHKSTK_MS
 
 /* Linker version detected at compile time. */
 #undef HOST_LINK_VERSION

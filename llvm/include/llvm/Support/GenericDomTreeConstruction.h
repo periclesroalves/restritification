@@ -251,18 +251,15 @@ void Calculate(DominatorTreeBase<typename GraphTraits<NodeT>::NodeType>& DT,
   // an infinite loop.
   typename GraphT::NodeType* Root = !MultipleRoots ? DT.Roots[0] : nullptr;
 
-  DT.RootNode =
-      (DT.DomTreeNodes[Root] =
-           llvm::make_unique<DomTreeNodeBase<typename GraphT::NodeType>>(
-               Root, nullptr)).get();
+  DT.DomTreeNodes[Root] = DT.RootNode =
+                  new DomTreeNodeBase<typename GraphT::NodeType>(Root, nullptr);
 
   // Loop over all of the reachable blocks in the function...
   for (unsigned i = 2; i <= N; ++i) {
     typename GraphT::NodeType* W = DT.Vertex[i];
 
-    // Don't replace this with 'count', the insertion side effect is important
-    if (DT.DomTreeNodes[W])
-      continue; // Haven't calculated this node yet?
+    DomTreeNodeBase<typename GraphT::NodeType> *BBNode = DT.DomTreeNodes[W];
+    if (BBNode) continue;  // Haven't calculated this node yet?
 
     typename GraphT::NodeType* ImmDom = DT.getIDom(W);
 
@@ -274,16 +271,15 @@ void Calculate(DominatorTreeBase<typename GraphTraits<NodeT>::NodeType>& DT,
 
     // Add a new tree node for this BasicBlock, and link it as a child of
     // IDomNode
-    DT.DomTreeNodes[W] = IDomNode->addChild(
-        llvm::make_unique<DomTreeNodeBase<typename GraphT::NodeType>>(
-            W, IDomNode));
+    DomTreeNodeBase<typename GraphT::NodeType> *C =
+                    new DomTreeNodeBase<typename GraphT::NodeType>(W, IDomNode);
+    DT.DomTreeNodes[W] = IDomNode->addChild(C);
   }
 
   // Free temporary memory used to construct idom's
   DT.IDoms.clear();
   DT.Info.clear();
-  DT.Vertex.clear();
-  DT.Vertex.shrink_to_fit();
+  std::vector<typename GraphT::NodeType*>().swap(DT.Vertex);
 
   DT.updateDFSNumbers();
 }

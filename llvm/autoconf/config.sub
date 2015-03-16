@@ -1489,8 +1489,6 @@ case $os in
 		;;
 	-nacl*)
 		;;
-	-ps4)
-		;;
 	-none)
 		;;
 	*)

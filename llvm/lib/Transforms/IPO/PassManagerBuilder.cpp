@@ -22,8 +22,9 @@
 #include "llvm/PassManager.h"
 #include "llvm/Support/CommandLine.h"
 #include "llvm/Support/ManagedStatic.h"
-#include "llvm/Analysis/TargetLibraryInfo.h"
+#include "llvm/Target/TargetLibraryInfo.h"
 #include "llvm/Target/TargetMachine.h"
+#include "llvm/Target/TargetSubtargetInfo.h"
 #include "llvm/Transforms/IPO.h"
 #include "llvm/Transforms/Scalar.h"
 #include "llvm/Transforms/Vectorize.h"
@@ -142,8 +143,7 @@ void PassManagerBuilder::populateFunctionPassManager(FunctionPassManager &FPM) {
   addExtensionsToPM(EP_EarlyAsPossible, FPM);
 
   // Add LibraryInfo if we have some.
-  if (LibraryInfo)
-    FPM.add(new TargetLibraryInfoWrapperPass(*LibraryInfo));
+  if (LibraryInfo) FPM.add(new TargetLibraryInfo(*LibraryInfo));
 
   if (OptLevel == 0) return;
 
@@ -182,8 +182,7 @@ void PassManagerBuilder::populateModulePassManager(PassManagerBase &MPM) {
   }
 
   // Add LibraryInfo if we have some.
-  if (LibraryInfo)
-    MPM.add(new TargetLibraryInfoWrapperPass(*LibraryInfo));
+  if (LibraryInfo) MPM.add(new TargetLibraryInfo(*LibraryInfo));
 
   addInitialAliasAnalysisPasses(MPM);
 
@@ -478,9 +477,15 @@ void PassManagerBuilder::addLTOOptimizationPasses(PassManagerBase &PM) {
     PM.add(createMergeFunctionsPass());
 }
 
-void PassManagerBuilder::populateLTOPassManager(PassManagerBase &PM) {
+void PassManagerBuilder::populateLTOPassManager(PassManagerBase &PM,
+                                                TargetMachine *TM) {
+  if (TM) {
+    PM.add(new DataLayoutPass());
+    TM->addAnalysisPasses(PM);
+  }
+
   if (LibraryInfo)
-    PM.add(new TargetLibraryInfoWrapperPass(*LibraryInfo));
+    PM.add(new TargetLibraryInfo(*LibraryInfo));
 
   if (VerifyInput)
     PM.add(createVerifierPass());

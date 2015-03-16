@@ -328,7 +328,7 @@ void A57ChainingConstraint::apply(PBQPRAGraph &G) {
   const MachineFunction &MF = G.getMetadata().MF;
   LiveIntervals &LIs = G.getMetadata().LIS;
 
-  TRI = MF.getSubtarget().getRegisterInfo();
+  TRI = MF.getTarget().getSubtargetImpl()->getRegisterInfo();
   DEBUG(MF.dump());
 
   for (const auto &MBB: MF) {

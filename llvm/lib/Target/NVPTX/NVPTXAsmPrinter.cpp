@@ -27,7 +27,6 @@
 #include "llvm/Analysis/ConstantFolding.h"
 #include "llvm/CodeGen/Analysis.h"
 #include "llvm/CodeGen/MachineFrameInfo.h"
-#include "llvm/CodeGen/MachineLoopInfo.h"
 #include "llvm/CodeGen/MachineModuleInfo.h"
 #include "llvm/CodeGen/MachineRegisterInfo.h"
 #include "llvm/IR/DebugInfo.h"
@@ -46,7 +45,6 @@
 #include "llvm/Support/TargetRegistry.h"
 #include "llvm/Support/TimeValue.h"
 #include "llvm/Target/TargetLoweringObjectFile.h"
-#include "llvm/Transforms/Utils/UnrollLoop.h"
 #include <sstream>
 using namespace llvm;
 
@@ -348,7 +346,7 @@ MCOperand NVPTXAsmPrinter::GetSymbolRef(const MCSymbol *Symbol) {
 }
 
 void NVPTXAsmPrinter::printReturnValStr(const Function *F, raw_ostream &O) {
-  const DataLayout *TD = TM.getDataLayout();
+  const DataLayout *TD = TM.getSubtargetImpl()->getDataLayout();
   const TargetLowering *TLI = TM.getSubtargetImpl()->getTargetLowering();
 
   Type *Ty = F->getReturnType();
@@ -418,44 +416,6 @@ void NVPTXAsmPrinter::printReturnValStr(const MachineFunction &MF,
                                         raw_ostream &O) {
   const Function *F = MF.getFunction();
   printReturnValStr(F, O);
-}
-
-// Return true if MBB is the header of a loop marked with
-// llvm.loop.unroll.disable.
-// TODO(jingyue): consider "#pragma unroll 1" which is equivalent to "#pragma
-// nounroll".
-bool NVPTXAsmPrinter::isLoopHeaderOfNoUnroll(
-    const MachineBasicBlock &MBB) const {
-  MachineLoopInfo &LI = getAnalysis<MachineLoopInfo>();
-  // TODO(jingyue): isLoopHeader() should take "const MachineBasicBlock *".
-  // We insert .pragma "nounroll" only to the loop header.
-  if (!LI.isLoopHeader(const_cast<MachineBasicBlock *>(&MBB)))
-    return false;
-
-  // llvm.loop.unroll.disable is marked on the back edges of a loop. Therefore,
-  // we iterate through each back edge of the loop with header MBB, and check
-  // whether its metadata contains llvm.loop.unroll.disable.
-  for (auto I = MBB.pred_begin(); I != MBB.pred_end(); ++I) {
-    const MachineBasicBlock *PMBB = *I;
-    if (LI.getLoopFor(PMBB) != LI.getLoopFor(&MBB)) {
-      // Edges from other loops to MBB are not back edges.
-      continue;
-    }
-    if (const BasicBlock *PBB = PMBB->getBasicBlock()) {
-      if (const MDNode *LoopID =
-              PBB->getTerminator()->getMetadata("llvm.loop")) {
-        if (GetUnrollMetadata(LoopID, "llvm.loop.unroll.disable"))
-          return true;
-      }
-    }
-  }
-  return false;
-}
-
-void NVPTXAsmPrinter::EmitBasicBlockStart(const MachineBasicBlock &MBB) const {
-  AsmPrinter::EmitBasicBlockStart(MBB);
-  if (isLoopHeaderOfNoUnroll(MBB))
-    OutStreamer.EmitRawText(StringRef("\t.pragma \"nounroll\";\n"));
 }
 
 void NVPTXAsmPrinter::EmitFunctionEntryLabel() {
@@ -831,7 +791,7 @@ bool NVPTXAsmPrinter::doInitialization(Module &M) {
   const_cast<TargetLoweringObjectFile &>(getObjFileLowering())
       .Initialize(OutContext, TM);
 
-  Mang = new Mangler(TM.getDataLayout());
+  Mang = new Mangler(TM.getSubtargetImpl()->getDataLayout());
 
   // Emit header before any dwarf directives are emitted below.
   emitHeader(M, OS1);
@@ -1032,7 +992,7 @@ void NVPTXAsmPrinter::printModuleLevelGV(const GlobalVariable *GVar,
       GVar->getName().startswith("nvvm."))
     return;
 
-  const DataLayout *TD = TM.getDataLayout();
+  const DataLayout *TD = TM.getSubtargetImpl()->getDataLayout();
 
   // GlobalVariables are always constant pointers themselves.
   const PointerType *PTy = GVar->getType();
@@ -1335,7 +1295,7 @@ NVPTXAsmPrinter::getPTXFundamentalTypeStr(const Type *Ty, bool useB4PTR) const {
 void NVPTXAsmPrinter::emitPTXGlobalVariable(const GlobalVariable *GVar,
                                             raw_ostream &O) {
 
-  const DataLayout *TD = TM.getDataLayout();
+  const DataLayout *TD = TM.getSubtargetImpl()->getDataLayout();
 
   // GlobalVariables are always constant pointers themselves.
   const PointerType *PTy = GVar->getType();
@@ -1445,7 +1405,7 @@ void NVPTXAsmPrinter::printParamName(int paramIndex, raw_ostream &O) {
 }
 
 void NVPTXAsmPrinter::emitFunctionParamList(const Function *F, raw_ostream &O) {
-  const DataLayout *TD = TM.getDataLayout();
+  const DataLayout *TD = TM.getSubtargetImpl()->getDataLayout();
   const AttributeSet &PAL = F->getAttributes();
   const TargetLowering *TLI = TM.getSubtargetImpl()->getTargetLowering();
   Function::const_arg_iterator I, E;
@@ -1778,7 +1738,7 @@ void NVPTXAsmPrinter::printScalarConstant(const Constant *CPV, raw_ostream &O) {
 void NVPTXAsmPrinter::bufferLEByte(const Constant *CPV, int Bytes,
                                    AggBuffer *aggBuffer) {
 
-  const DataLayout *TD = TM.getDataLayout();
+  const DataLayout *TD = TM.getSubtargetImpl()->getDataLayout();
 
   if (isa<UndefValue>(CPV) || CPV->isNullValue()) {
     int s = TD->getTypeAllocSize(CPV->getType());
@@ -1902,7 +1862,7 @@ void NVPTXAsmPrinter::bufferLEByte(const Constant *CPV, int Bytes,
 
 void NVPTXAsmPrinter::bufferAggregateConstant(const Constant *CPV,
                                               AggBuffer *aggBuffer) {
-  const DataLayout *TD = TM.getDataLayout();
+  const DataLayout *TD = TM.getSubtargetImpl()->getDataLayout();
   int Bytes;
 
   // Old constants

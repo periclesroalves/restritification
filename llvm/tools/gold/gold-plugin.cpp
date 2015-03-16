@@ -15,8 +15,6 @@
 #include "llvm/Config/config.h" // plugin-api.h requires HAVE_STDINT_H
 #include "llvm/ADT/DenseSet.h"
 #include "llvm/ADT/StringSet.h"
-#include "llvm/Analysis/TargetLibraryInfo.h"
-#include "llvm/Analysis/TargetTransformInfo.h"
 #include "llvm/Bitcode/ReaderWriter.h"
 #include "llvm/CodeGen/Analysis.h"
 #include "llvm/CodeGen/CommandFlags.h"
@@ -36,6 +34,7 @@
 #include "llvm/Support/MemoryBuffer.h"
 #include "llvm/Support/TargetRegistry.h"
 #include "llvm/Support/TargetSelect.h"
+#include "llvm/Target/TargetLibraryInfo.h"
 #include "llvm/Transforms/IPO.h"
 #include "llvm/Transforms/IPO/PassManagerBuilder.h"
 #include "llvm/Transforms/Utils/GlobalStatus.h"
@@ -560,11 +559,9 @@ static void freeSymName(ld_plugin_symbol &Sym) {
 }
 
 static std::unique_ptr<Module>
-getModuleForFile(LLVMContext &Context, claimed_file &F, raw_fd_ostream *ApiFile,
+getModuleForFile(LLVMContext &Context, claimed_file &F,
+                 off_t Filesize, raw_fd_ostream *ApiFile,
                  StringSet<> &Internalize, StringSet<> &Maybe) {
-  ld_plugin_input_file File;
-  if (get_input_file(F.handle, &File) != LDPS_OK)
-    message(LDPL_FATAL, "Failed to get file information");
 
   if (get_symbols(F.handle, F.syms.size(), &F.syms[0]) != LDPS_OK)
     message(LDPL_FATAL, "Failed to get symbol information");
@@ -573,16 +570,13 @@ getModuleForFile(LLVMContext &Context, claimed_file &F, raw_fd_ostream *ApiFile,
   if (get_view(F.handle, &View) != LDPS_OK)
     message(LDPL_FATAL, "Failed to get a view of file");
 
-  MemoryBufferRef BufferRef(StringRef((const char *)View, File.filesize), "");
+  MemoryBufferRef BufferRef(StringRef((const char *)View, Filesize), "");
   ErrorOr<std::unique_ptr<object::IRObjectFile>> ObjOrErr =
       object::IRObjectFile::create(BufferRef, Context);
 
   if (std::error_code EC = ObjOrErr.getError())
     message(LDPL_FATAL, "Could not read bitcode from file : %s",
             EC.message().c_str());
-
-  if (release_input_file(F.handle) != LDPS_OK)
-    message(LDPL_FATAL, "Failed to release file information");
 
   object::IRObjectFile &Obj = **ObjOrErr;
 
@@ -699,17 +693,14 @@ getModuleForFile(LLVMContext &Context, claimed_file &F, raw_fd_ostream *ApiFile,
 
 static void runLTOPasses(Module &M, TargetMachine &TM) {
   PassManager passes;
-  passes.add(new DataLayoutPass());
-  passes.add(createTargetTransformInfoWrapperPass(TM.getTargetIRAnalysis()));
-
   PassManagerBuilder PMB;
-  PMB.LibraryInfo = new TargetLibraryInfoImpl(Triple(TM.getTargetTriple()));
+  PMB.LibraryInfo = new TargetLibraryInfo(Triple(TM.getTargetTriple()));
   PMB.Inliner = createFunctionInliningPass();
   PMB.VerifyInput = true;
   PMB.VerifyOutput = true;
   PMB.LoopVectorize = true;
   PMB.SLPVectorize = true;
-  PMB.populateLTOPassManager(passes);
+  PMB.populateLTOPassManager(passes, &TM);
   passes.run(M);
 }
 
@@ -802,8 +793,12 @@ static ld_plugin_status allSymbolsReadHook(raw_fd_ostream *ApiFile) {
   StringSet<> Internalize;
   StringSet<> Maybe;
   for (claimed_file &F : Modules) {
+    ld_plugin_input_file File;
+    if (get_input_file(F.handle, &File) != LDPS_OK)
+      message(LDPL_FATAL, "Failed to get file information");
     std::unique_ptr<Module> M =
-        getModuleForFile(Context, F, ApiFile, Internalize, Maybe);
+        getModuleForFile(Context, F, File.filesize, ApiFile,
+                         Internalize, Maybe);
     if (!options::triple.empty())
       M->setTargetTriple(options::triple.c_str());
     else if (M->getTargetTriple().empty()) {
@@ -812,6 +807,8 @@ static ld_plugin_status allSymbolsReadHook(raw_fd_ostream *ApiFile) {
 
     if (L.linkInModule(M.get()))
       message(LDPL_FATAL, "Failed to link module");
+    if (release_input_file(F.handle) != LDPS_OK)
+      message(LDPL_FATAL, "Failed to release file information");
   }
 
   for (const auto &Name : Internalize) {

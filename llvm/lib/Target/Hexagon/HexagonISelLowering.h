@@ -49,10 +49,7 @@ bool isPositiveHalfWord(SDNode *N);
       FTOI,        // FP to Int within a FP register.
       ITOF,        // Int to FP within a FP register.
 
-      CALLv3,      // A V3+ call instruction.
-      CALLv3nr,    // A V3+ call instruction that doesn't return.
-      CALLR,
-
+      CALL,        // A call instruction.
       RET_FLAG,    // Return with a flag operand.
       BR_JT,       // Jump table.
       BARRIER,     // Memory barrier

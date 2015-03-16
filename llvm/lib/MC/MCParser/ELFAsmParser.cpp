@@ -199,7 +199,8 @@ bool ELFAsmParser::ParseSectionSwitch(StringRef Section, unsigned Type,
       return true;
   }
 
-  getStreamer().SwitchSection(getContext().getELFSection(Section, Type, Flags),
+  getStreamer().SwitchSection(getContext().getELFSection(
+                                Section, Type, Flags, Kind),
                               Subsection);
 
   return false;
@@ -266,6 +267,40 @@ bool ELFAsmParser::ParseSectionName(StringRef &SectionName) {
     return true;
 
   return false;
+}
+
+static SectionKind computeSectionKind(unsigned Flags, unsigned ElemSize) {
+  if (Flags & ELF::SHF_EXECINSTR)
+    return SectionKind::getText();
+  if (Flags & ELF::SHF_TLS)
+    return SectionKind::getThreadData();
+  if (Flags & ELF::SHF_MERGE) {
+    if (Flags & ELF::SHF_STRINGS) {
+      switch (ElemSize) {
+      default:
+        break;
+      case 1:
+        return SectionKind::getMergeable1ByteCString();
+      case 2:
+        return SectionKind::getMergeable2ByteCString();
+      case 4:
+        return SectionKind::getMergeable4ByteCString();
+      }
+    } else {
+      switch (ElemSize) {
+      default:
+        break;
+      case 4:
+        return SectionKind::getMergeableConst4();
+      case 8:
+        return SectionKind::getMergeableConst8();
+      case 16:
+        return SectionKind::getMergeableConst16();
+      }
+    }
+  }
+
+  return SectionKind::getDataRel();
 }
 
 static unsigned parseSectionFlags(StringRef flagsStr, bool *UseLastGroup) {
@@ -509,8 +544,9 @@ EndStmt:
       }
   }
 
-  const MCSection *ELFSection =
-      getContext().getELFSection(SectionName, Type, Flags, Size, GroupName);
+  SectionKind Kind = computeSectionKind(Flags, Size);
+  const MCSection *ELFSection = getContext().getELFSection(
+      SectionName, Type, Flags, Kind, Size, GroupName);
   getStreamer().SwitchSection(ELFSection, Subsection);
 
   if (getContext().getGenDwarfForAssembly()) {
@@ -661,7 +697,9 @@ bool ELFAsmParser::ParseDirectiveVersion(StringRef, SMLoc) {
 
   Lex();
 
-  const MCSection *Note = getContext().getELFSection(".note", ELF::SHT_NOTE, 0);
+  const MCSection *Note =
+    getContext().getELFSection(".note", ELF::SHT_NOTE, 0,
+                               SectionKind::getReadOnly());
 
   getStreamer().PushSection();
   getStreamer().SwitchSection(Note);

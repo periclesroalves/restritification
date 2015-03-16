@@ -28,8 +28,7 @@ namespace {
     virtual ~X86WinCOFFObjectWriter();
 
     unsigned getRelocType(const MCValue &Target, const MCFixup &Fixup,
-                          bool IsCrossSection,
-                          const MCAsmBackend &MAB) const override;
+                          bool IsCrossSection) const override;
   };
 }
 
@@ -41,8 +40,7 @@ X86WinCOFFObjectWriter::~X86WinCOFFObjectWriter() {}
 
 unsigned X86WinCOFFObjectWriter::getRelocType(const MCValue &Target,
                                               const MCFixup &Fixup,
-                                              bool IsCrossSection,
-                                              const MCAsmBackend &MAB) const {
+                                              bool IsCrossSection) const {
   unsigned FixupKind = IsCrossSection ? FK_PCRel_4 : Fixup.getKind();
 
   MCSymbolRefExpr::VariantKind Modifier = Target.isAbsolute() ?

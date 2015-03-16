@@ -21,7 +21,7 @@
 #include "llvm/IR/LLVMContext.h"
 #include "llvm/IR/Module.h"
 #include "llvm/IR/Type.h"
-#include "llvm/Analysis/TargetLibraryInfo.h"
+#include "llvm/Target/TargetLibraryInfo.h"
 
 using namespace llvm;
 

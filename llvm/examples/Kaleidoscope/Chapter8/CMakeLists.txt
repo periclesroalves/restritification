@@ -1,9 +1,14 @@
 set(LLVM_LINK_COMPONENTS
+  Analysis
   Core
   ExecutionEngine
-  MCJIT
+  InstCombine
+  MC
+  ScalarOpts
   Support
+  TransformUtils
   native
+  mcjit
   )
 
 set(LLVM_REQUIRES_RTTI 1)

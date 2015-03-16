@@ -71,17 +71,11 @@ private:
 
   MachineFunction &MF;
   MachineRegisterInfo &MRI;
-  const MipsSubtarget &Subtarget;
-  const MipsSEInstrInfo &TII;
-  const MipsRegisterInfo &RegInfo;
 };
 }
 
 ExpandPseudo::ExpandPseudo(MachineFunction &MF_)
-    : MF(MF_), MRI(MF.getRegInfo()),
-      Subtarget(static_cast<const MipsSubtarget &>(MF.getSubtarget())),
-      TII(*static_cast<const MipsSEInstrInfo *>(Subtarget.getInstrInfo())),
-      RegInfo(*Subtarget.getRegisterInfo()) {}
+  : MF(MF_), MRI(MF.getRegInfo()) {}
 
 bool ExpandPseudo::expand() {
   bool Expanded = false;
@@ -152,6 +146,11 @@ void ExpandPseudo::expandLoadCCond(MachineBasicBlock &MBB, Iter I) {
 
   assert(I->getOperand(0).isReg() && I->getOperand(1).isFI());
 
+  const MipsSEInstrInfo &TII =
+      *static_cast<const MipsSEInstrInfo *>(MF.getSubtarget().getInstrInfo());
+  const MipsRegisterInfo &RegInfo = *static_cast<const MipsRegisterInfo *>(
+                                        MF.getSubtarget().getRegisterInfo());
+
   const TargetRegisterClass *RC = RegInfo.intRegClass(4);
   unsigned VR = MRI.createVirtualRegister(RC);
   unsigned Dst = I->getOperand(0).getReg(), FI = I->getOperand(1).getIndex();
@@ -166,6 +165,11 @@ void ExpandPseudo::expandStoreCCond(MachineBasicBlock &MBB, Iter I) {
   //  store $vr, FI
 
   assert(I->getOperand(0).isReg() && I->getOperand(1).isFI());
+
+  const MipsSEInstrInfo &TII =
+      *static_cast<const MipsSEInstrInfo *>(MF.getSubtarget().getInstrInfo());
+  const MipsRegisterInfo &RegInfo = *static_cast<const MipsRegisterInfo *>(
+                                        MF.getSubtarget().getRegisterInfo());
 
   const TargetRegisterClass *RC = RegInfo.intRegClass(4);
   unsigned VR = MRI.createVirtualRegister(RC);
@@ -184,6 +188,11 @@ void ExpandPseudo::expandLoadACC(MachineBasicBlock &MBB, Iter I,
   //  copy hi, $vr1
 
   assert(I->getOperand(0).isReg() && I->getOperand(1).isFI());
+
+  const MipsSEInstrInfo &TII =
+      *static_cast<const MipsSEInstrInfo *>(MF.getSubtarget().getInstrInfo());
+  const MipsRegisterInfo &RegInfo = *static_cast<const MipsRegisterInfo *>(
+                                        MF.getSubtarget().getRegisterInfo());
 
   const TargetRegisterClass *RC = RegInfo.intRegClass(RegSize);
   unsigned VR0 = MRI.createVirtualRegister(RC);
@@ -209,6 +218,11 @@ void ExpandPseudo::expandStoreACC(MachineBasicBlock &MBB, Iter I,
   //  store $vr1, FI + 4
 
   assert(I->getOperand(0).isReg() && I->getOperand(1).isFI());
+
+  const MipsSEInstrInfo &TII =
+      *static_cast<const MipsSEInstrInfo *>(MF.getSubtarget().getInstrInfo());
+  const MipsRegisterInfo &RegInfo = *static_cast<const MipsRegisterInfo *>(
+                                        MF.getSubtarget().getRegisterInfo());
 
   const TargetRegisterClass *RC = RegInfo.intRegClass(RegSize);
   unsigned VR0 = MRI.createVirtualRegister(RC);
@@ -239,6 +253,11 @@ bool ExpandPseudo::expandCopyACC(MachineBasicBlock &MBB, Iter I,
   //  copy dst_lo, $vr0
   //  mfhi $vr1, src
   //  copy dst_hi, $vr1
+
+  const MipsSEInstrInfo &TII =
+      *static_cast<const MipsSEInstrInfo *>(MF.getSubtarget().getInstrInfo());
+  const MipsRegisterInfo &RegInfo = *static_cast<const MipsRegisterInfo *>(
+                                        MF.getSubtarget().getRegisterInfo());
 
   unsigned Dst = I->getOperand(0).getReg(), Src = I->getOperand(1).getReg();
   unsigned VRegSize = RegInfo.getMinimalPhysRegClass(Dst)->getSize() / 2;
@@ -279,8 +298,16 @@ bool ExpandPseudo::expandBuildPairF64(MachineBasicBlock &MBB,
   // register). Unfortunately, we have to make this decision before register
   // allocation so for now we use a spill/reload sequence for all
   // double-precision values in regardless of being an odd/even register.
+
+  const TargetMachine &TM = MF.getTarget();
+  const MipsSubtarget &Subtarget = TM.getSubtarget<MipsSubtarget>();
   if ((Subtarget.isABI_FPXX() && !Subtarget.hasMTHC1()) ||
       (FP64 && !Subtarget.useOddSPReg())) {
+    const MipsSEInstrInfo &TII = *static_cast<const MipsSEInstrInfo *>(
+                                     TM.getSubtargetImpl()->getInstrInfo());
+    const MipsRegisterInfo &TRI = *static_cast<const MipsRegisterInfo *>(
+                                      TM.getSubtargetImpl()->getRegisterInfo());
+
     unsigned DstReg = I->getOperand(0).getReg();
     unsigned LoReg = I->getOperand(1).getReg();
     unsigned HiReg = I->getOperand(2).getReg();
@@ -300,11 +327,11 @@ bool ExpandPseudo::expandBuildPairF64(MachineBasicBlock &MBB,
     int FI = MF.getInfo<MipsFunctionInfo>()->getMoveF64ViaSpillFI(RC2);
     if (!Subtarget.isLittle())
       std::swap(LoReg, HiReg);
-    TII.storeRegToStack(MBB, I, LoReg, I->getOperand(1).isKill(), FI, RC,
-                        &RegInfo, 0);
-    TII.storeRegToStack(MBB, I, HiReg, I->getOperand(2).isKill(), FI, RC,
-                        &RegInfo, 4);
-    TII.loadRegFromStack(MBB, I, DstReg, FI, RC2, &RegInfo, 0);
+    TII.storeRegToStack(MBB, I, LoReg, I->getOperand(1).isKill(), FI, RC, &TRI,
+                        0);
+    TII.storeRegToStack(MBB, I, HiReg, I->getOperand(2).isKill(), FI, RC, &TRI,
+                        4);
+    TII.loadRegFromStack(MBB, I, DstReg, FI, RC2, &TRI, 0);
     return true;
   }
 
@@ -332,8 +359,15 @@ bool ExpandPseudo::expandExtractElementF64(MachineBasicBlock &MBB,
   // allocation so for now we use a spill/reload sequence for all
   // double-precision values in regardless of being an odd/even register.
 
+  const TargetMachine &TM = MF.getTarget();
+  const MipsSubtarget &Subtarget = TM.getSubtarget<MipsSubtarget>();
   if ((Subtarget.isABI_FPXX() && !Subtarget.hasMTHC1()) ||
       (FP64 && !Subtarget.useOddSPReg())) {
+    const MipsSEInstrInfo &TII = *static_cast<const MipsSEInstrInfo *>(
+                                     TM.getSubtargetImpl()->getInstrInfo());
+    const MipsRegisterInfo &TRI = *static_cast<const MipsRegisterInfo *>(
+                                      TM.getSubtargetImpl()->getRegisterInfo());
+
     unsigned DstReg = I->getOperand(0).getReg();
     unsigned SrcReg = I->getOperand(1).getReg();
     unsigned N = I->getOperand(2).getImm();
@@ -352,9 +386,9 @@ bool ExpandPseudo::expandExtractElementF64(MachineBasicBlock &MBB,
     // We re-use the same spill slot each time so that the stack frame doesn't
     // grow too much in functions with a large number of moves.
     int FI = MF.getInfo<MipsFunctionInfo>()->getMoveF64ViaSpillFI(RC);
-    TII.storeRegToStack(MBB, I, SrcReg, I->getOperand(1).isKill(), FI, RC,
-                        &RegInfo, 0);
-    TII.loadRegFromStack(MBB, I, DstReg, FI, RC2, &RegInfo, Offset);
+    TII.storeRegToStack(MBB, I, SrcReg, I->getOperand(1).isKill(), FI, RC, &TRI,
+                        0);
+    TII.loadRegFromStack(MBB, I, DstReg, FI, RC2, &TRI, Offset);
     return true;
   }
 
@@ -381,9 +415,9 @@ void MipsSEFrameLowering::emitPrologue(MachineFunction &MF) const {
   MipsFunctionInfo *MipsFI = MF.getInfo<MipsFunctionInfo>();
 
   const MipsSEInstrInfo &TII =
-      *static_cast<const MipsSEInstrInfo *>(STI.getInstrInfo());
-  const MipsRegisterInfo &RegInfo =
-      *static_cast<const MipsRegisterInfo *>(STI.getRegisterInfo());
+      *static_cast<const MipsSEInstrInfo *>(MF.getSubtarget().getInstrInfo());
+  const MipsRegisterInfo &RegInfo = *static_cast<const MipsRegisterInfo *>(
+                                        MF.getSubtarget().getRegisterInfo());
 
   MachineBasicBlock::iterator MBBI = MBB.begin();
   DebugLoc dl = MBBI != MBB.end() ? MBBI->getDebugLoc() : DebugLoc();
@@ -516,9 +550,9 @@ void MipsSEFrameLowering::emitEpilogue(MachineFunction &MF,
   MipsFunctionInfo *MipsFI = MF.getInfo<MipsFunctionInfo>();
 
   const MipsSEInstrInfo &TII =
-      *static_cast<const MipsSEInstrInfo *>(STI.getInstrInfo());
-  const MipsRegisterInfo &RegInfo =
-      *static_cast<const MipsRegisterInfo *>(STI.getRegisterInfo());
+      *static_cast<const MipsSEInstrInfo *>(MF.getSubtarget().getInstrInfo());
+  const MipsRegisterInfo &RegInfo = *static_cast<const MipsRegisterInfo *>(
+                                        MF.getSubtarget().getRegisterInfo());
 
   DebugLoc dl = MBBI->getDebugLoc();
   unsigned SP = STI.isABI_N64() ? Mips::SP_64 : Mips::SP;
@@ -571,7 +605,7 @@ spillCalleeSavedRegisters(MachineBasicBlock &MBB,
                           const TargetRegisterInfo *TRI) const {
   MachineFunction *MF = MBB.getParent();
   MachineBasicBlock *EntryBlock = MF->begin();
-  const TargetInstrInfo &TII = *STI.getInstrInfo();
+  const TargetInstrInfo &TII = *MF->getSubtarget().getInstrInfo();
 
   for (unsigned i = 0, e = CSI.size(); i != e; ++i) {
     // Add the callee-saved register as live-in. Do not add if the register is
@@ -612,7 +646,7 @@ void MipsSEFrameLowering::
 eliminateCallFramePseudoInstr(MachineFunction &MF, MachineBasicBlock &MBB,
                               MachineBasicBlock::iterator I) const {
   const MipsSEInstrInfo &TII =
-      *static_cast<const MipsSEInstrInfo *>(STI.getInstrInfo());
+      *static_cast<const MipsSEInstrInfo *>(MF.getSubtarget().getInstrInfo());
 
   if (!hasReservedCallFrame(MF)) {
     int64_t Amount = I->getOperand(0).getImm();

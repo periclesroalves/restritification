@@ -914,7 +914,8 @@ SparcTargetLowering::LowerCall_32(TargetLowering::CallLoweringInfo &CLI,
                                   RegsToPass[i].second.getValueType()));
 
   // Add a register mask operand representing the call-preserved registers.
-  const SparcRegisterInfo *TRI = Subtarget->getRegisterInfo();
+  const SparcRegisterInfo *TRI =
+      getTargetMachine().getSubtarget<SparcSubtarget>().getRegisterInfo();
   const uint32_t *Mask = ((hasReturnsTwice)
                           ? TRI->getRTCallPreservedMask(CallConv)
                           : TRI->getCallPreservedMask(CallConv));
@@ -1226,7 +1227,8 @@ SparcTargetLowering::LowerCall_64(TargetLowering::CallLoweringInfo &CLI,
                                   RegsToPass[i].second.getValueType()));
 
   // Add a register mask operand representing the call-preserved registers.
-  const SparcRegisterInfo *TRI = Subtarget->getRegisterInfo();
+  const SparcRegisterInfo *TRI =
+      getTargetMachine().getSubtarget<SparcSubtarget>().getRegisterInfo();
   const uint32_t *Mask =
       ((hasReturnsTwice) ? TRI->getRTCallPreservedMask(CLI.CallConv)
                          : TRI->getCallPreservedMask(CLI.CallConv));
@@ -1363,9 +1365,10 @@ static SPCC::CondCodes FPCondCCodeToFCC(ISD::CondCode CC) {
   }
 }
 
-SparcTargetLowering::SparcTargetLowering(TargetMachine &TM,
-                                         const SparcSubtarget &STI)
-    : TargetLowering(TM), Subtarget(&STI) {
+SparcTargetLowering::SparcTargetLowering(TargetMachine &TM)
+  : TargetLowering(TM) {
+  Subtarget = &TM.getSubtarget<SparcSubtarget>();
+
   // Set up the register classes.
   addRegisterClass(MVT::i32, &SP::IntRegsRegClass);
   addRegisterClass(MVT::f32, &SP::FPRegsRegClass);
@@ -1904,8 +1907,10 @@ SDValue SparcTargetLowering::LowerGlobalTLSAddress(SDValue Op,
     Ops.push_back(Callee);
     Ops.push_back(Symbol);
     Ops.push_back(DAG.getRegister(SP::O0, PtrVT));
-    const uint32_t *Mask =
-        Subtarget->getRegisterInfo()->getCallPreservedMask(CallingConv::C);
+    const uint32_t *Mask = getTargetMachine()
+                               .getSubtargetImpl()
+                               ->getRegisterInfo()
+                               ->getCallPreservedMask(CallingConv::C);
     assert(Mask && "Missing call preserved mask for calling convention");
     Ops.push_back(DAG.getRegisterMask(Mask));
     Ops.push_back(InFlag);
@@ -2901,7 +2906,8 @@ MachineBasicBlock*
 SparcTargetLowering::expandSelectCC(MachineInstr *MI,
                                     MachineBasicBlock *BB,
                                     unsigned BROpcode) const {
-  const TargetInstrInfo &TII = *Subtarget->getInstrInfo();
+  const TargetInstrInfo &TII =
+      *getTargetMachine().getSubtargetImpl()->getInstrInfo();
   DebugLoc dl = MI->getDebugLoc();
   unsigned CC = (SPCC::CondCodes)MI->getOperand(3).getImm();
 
@@ -2962,7 +2968,8 @@ SparcTargetLowering::expandAtomicRMW(MachineInstr *MI,
                                      MachineBasicBlock *MBB,
                                      unsigned Opcode,
                                      unsigned CondCode) const {
-  const TargetInstrInfo &TII = *Subtarget->getInstrInfo();
+  const TargetInstrInfo &TII =
+      *getTargetMachine().getSubtargetImpl()->getInstrInfo();
   MachineRegisterInfo &MRI = MBB->getParent()->getRegInfo();
   DebugLoc DL = MI->getDebugLoc();
 

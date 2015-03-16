@@ -143,12 +143,6 @@ protected:
                                      std::string *ErrorStr,
                                      std::unique_ptr<RTDyldMemoryManager> MCJMM,
                                      std::unique_ptr<TargetMachine> TM);
-
-  static ExecutionEngine *(*OrcMCJITReplacementCtor)(
-                                    std::string *ErrorStr,
-                                    std::unique_ptr<RTDyldMemoryManager> OrcJMM,
-                                    std::unique_ptr<TargetMachine> TM);
-
   static ExecutionEngine *(*InterpCtor)(std::unique_ptr<Module> M,
                                         std::string *ErrorStr);
 
@@ -470,7 +464,6 @@ public:
   }
 
 protected:
-  ExecutionEngine() : EEState(*this) {}
   explicit ExecutionEngine(std::unique_ptr<Module> M);
 
   void emitGlobals();
@@ -508,15 +501,11 @@ private:
   std::string MCPU;
   SmallVector<std::string, 4> MAttrs;
   bool VerifyModules;
-  bool UseOrcMCJITReplacement;
 
   /// InitEngine - Does the common initialization of default options.
   void InitEngine();
 
 public:
-  /// Default constructor for EngineBuilder.
-  EngineBuilder();
-
   /// Constructor for EngineBuilder.
   EngineBuilder(std::unique_ptr<Module> M);
 
@@ -599,11 +588,6 @@ public:
     MAttrs.clear();
     MAttrs.append(mattrs.begin(), mattrs.end());
     return *this;
-  }
-
-  // \brief Use OrcMCJITReplacement instead of MCJIT. Off by default.
-  void setUseOrcMCJITReplacement(bool UseOrcMCJITReplacement) {
-    this->UseOrcMCJITReplacement = UseOrcMCJITReplacement;
   }
 
   TargetMachine *selectTarget();

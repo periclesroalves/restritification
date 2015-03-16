@@ -16,7 +16,7 @@
 
 #include "llvm/IR/IntrinsicInst.h"
 #include "llvm/IR/Intrinsics.h"
-#include "llvm/Analysis/TargetLibraryInfo.h"
+#include "llvm/Target/TargetLibraryInfo.h"
 
 namespace llvm {
 
@@ -59,7 +59,7 @@ static inline bool isTriviallyVectorizable(Intrinsic::ID ID) {
   }
 }
 
-static inline bool hasVectorInstrinsicScalarOpd(Intrinsic::ID ID,
+static bool hasVectorInstrinsicScalarOpd(Intrinsic::ID ID,
                                          unsigned ScalarOpdIdx) {
   switch (ID) {
     case Intrinsic::ctlz:

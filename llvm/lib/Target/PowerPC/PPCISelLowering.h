@@ -76,6 +76,13 @@ namespace llvm {
       /// The following two target-specific nodes are used for calls through
       /// function pointers in the 64-bit SVR4 ABI.
 
+      /// Like a regular LOAD but additionally taking/producing a flag.
+      LOAD,
+
+      /// Like LOAD (taking/producing a flag), but using r2 as hard-coded
+      /// destination.
+      LOAD_TOC,
+
       /// OPRC, CHAIN = DYNALLOC(CHAIN, NEGSIZE, FRAME_INDEX)
       /// This instruction is lowered in PPCRegisterInfo::eliminateFrameIndex to
       /// compute an allocation on the stack.
@@ -367,12 +374,12 @@ namespace llvm {
     SDValue get_VSPLTI_elt(SDNode *N, unsigned ByteSize, SelectionDAG &DAG);
   }
 
+  class PPCSubtarget;
   class PPCTargetLowering : public TargetLowering {
     const PPCSubtarget &Subtarget;
 
   public:
-    explicit PPCTargetLowering(const PPCTargetMachine &TM,
-                               const PPCSubtarget &STI);
+    explicit PPCTargetLowering(const PPCTargetMachine &TM);
 
     /// getTargetNodeName() - This method returns the name of a target specific
     /// DAG node.
@@ -680,12 +687,11 @@ namespace llvm {
                        SelectionDAG &DAG,
                        SmallVector<std::pair<unsigned, SDValue>, 8>
                          &RegsToPass,
-                       SDValue InFlag, SDValue Chain, SDValue CallSeqStart,
+                       SDValue InFlag, SDValue Chain,
                        SDValue &Callee,
                        int SPDiff, unsigned NumBytes,
                        const SmallVectorImpl<ISD::InputArg> &Ins,
-                       SmallVectorImpl<SDValue> &InVals,
-                       ImmutableCallSite *CS) const;
+                       SmallVectorImpl<SDValue> &InVals) const;
 
     SDValue
       LowerFormalArguments(SDValue Chain,
@@ -747,8 +753,7 @@ namespace llvm {
                        const SmallVectorImpl<SDValue> &OutVals,
                        const SmallVectorImpl<ISD::InputArg> &Ins,
                        SDLoc dl, SelectionDAG &DAG,
-                       SmallVectorImpl<SDValue> &InVals,
-                       ImmutableCallSite *CS) const;
+                       SmallVectorImpl<SDValue> &InVals) const;
     SDValue
       LowerCall_64SVR4(SDValue Chain, SDValue Callee,
                        CallingConv::ID CallConv,
@@ -757,8 +762,7 @@ namespace llvm {
                        const SmallVectorImpl<SDValue> &OutVals,
                        const SmallVectorImpl<ISD::InputArg> &Ins,
                        SDLoc dl, SelectionDAG &DAG,
-                       SmallVectorImpl<SDValue> &InVals,
-                       ImmutableCallSite *CS) const;
+                       SmallVectorImpl<SDValue> &InVals) const;
     SDValue
     LowerCall_32SVR4(SDValue Chain, SDValue Callee, CallingConv::ID CallConv,
                      bool isVarArg, bool isTailCall, bool IsPatchPoint,
@@ -766,8 +770,7 @@ namespace llvm {
                      const SmallVectorImpl<SDValue> &OutVals,
                      const SmallVectorImpl<ISD::InputArg> &Ins,
                      SDLoc dl, SelectionDAG &DAG,
-                     SmallVectorImpl<SDValue> &InVals,
-                     ImmutableCallSite *CS) const;
+                     SmallVectorImpl<SDValue> &InVals) const;
 
     SDValue lowerEH_SJLJ_SETJMP(SDValue Op, SelectionDAG &DAG) const;
     SDValue lowerEH_SJLJ_LONGJMP(SDValue Op, SelectionDAG &DAG) const;

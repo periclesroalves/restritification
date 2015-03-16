@@ -16,7 +16,6 @@
 #include "SelectionDAGBuilder.h"
 #include "llvm/ADT/SmallSet.h"
 #include "llvm/ADT/Statistic.h"
-#include "llvm/CodeGen/GCMetadata.h"
 #include "llvm/CodeGen/FunctionLoweringInfo.h"
 #include "llvm/CodeGen/GCStrategy.h"
 #include "llvm/CodeGen/SelectionDAG.h"

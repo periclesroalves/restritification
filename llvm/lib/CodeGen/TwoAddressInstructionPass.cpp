@@ -1515,9 +1515,9 @@ bool TwoAddressInstructionPass::runOnMachineFunction(MachineFunction &Func) {
   MF = &Func;
   const TargetMachine &TM = MF->getTarget();
   MRI = &MF->getRegInfo();
-  TII = MF->getSubtarget().getInstrInfo();
-  TRI = MF->getSubtarget().getRegisterInfo();
-  InstrItins = MF->getSubtarget().getInstrItineraryData();
+  TII = TM.getSubtargetImpl()->getInstrInfo();
+  TRI = TM.getSubtargetImpl()->getRegisterInfo();
+  InstrItins = TM.getSubtargetImpl()->getInstrItineraryData();
   LV = getAnalysisIfAvailable<LiveVariables>();
   LIS = getAnalysisIfAvailable<LiveIntervals>();
   AA = &getAnalysis<AliasAnalysis>();

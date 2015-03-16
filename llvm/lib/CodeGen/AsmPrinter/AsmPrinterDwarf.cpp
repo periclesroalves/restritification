@@ -150,7 +150,7 @@ unsigned AsmPrinter::GetSizeOfEncodedValue(unsigned Encoding) const {
   default:
     llvm_unreachable("Invalid encoded value.");
   case dwarf::DW_EH_PE_absptr:
-    return TM.getDataLayout()->getPointerSize();
+    return TM.getSubtargetImpl()->getDataLayout()->getPointerSize();
   case dwarf::DW_EH_PE_udata2:
     return 2;
   case dwarf::DW_EH_PE_udata4:
@@ -228,13 +228,14 @@ void AsmPrinter::EmitDwarfOpPiece(ByteStreamer &Streamer,
 
 /// EmitDwarfRegOp - Emit dwarf register operation.
 void AsmPrinter::EmitDwarfRegOp(ByteStreamer &Streamer,
-                                const MachineLocation &MLoc) const {
+                                const MachineLocation &MLoc,
+                                bool Indirect) const {
   DebugLocDwarfExpression Expr(*this, Streamer);
   const TargetRegisterInfo *TRI = TM.getSubtargetImpl()->getRegisterInfo();
   int Reg = TRI->getDwarfRegNum(MLoc.getReg(), false);
   if (Reg < 0) {
     // We assume that pointers are always in an addressable register.
-    if (MLoc.isIndirect())
+    if (Indirect || MLoc.isIndirect())
       // FIXME: We have no reasonable way of handling errors in here. The
       // caller might be in the middle of a dwarf expression. We should
       // probably assert that Reg >= 0 once debug info generation is more
@@ -250,7 +251,9 @@ void AsmPrinter::EmitDwarfRegOp(ByteStreamer &Streamer,
   }
 
   if (MLoc.isIndirect())
-    Expr.AddRegIndirect(Reg, MLoc.getOffset());
+    Expr.AddRegIndirect(Reg, MLoc.getOffset(), Indirect);
+  else if (Indirect)
+    Expr.AddRegIndirect(Reg, 0, false);
   else
     Expr.AddReg(Reg);
 }

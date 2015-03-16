@@ -52,8 +52,11 @@ class LLVM_LIBRARY_VISIBILITY ARMAsmPrinter : public AsmPrinter {
   SmallVector<std::pair<unsigned, MCSymbol*>, 4> ThumbIndirectPads;
 
 public:
-  explicit ARMAsmPrinter(TargetMachine &TM,
-                         std::unique_ptr<MCStreamer> Streamer);
+  explicit ARMAsmPrinter(TargetMachine &TM, MCStreamer &Streamer)
+    : AsmPrinter(TM, Streamer), AFI(nullptr), MCP(nullptr),
+      InConstantPool(false) {
+    Subtarget = &TM.getSubtarget<ARMSubtarget>();
+  }
 
   const char *getPassName() const override {
     return "ARM Assembly / Object Emitter";

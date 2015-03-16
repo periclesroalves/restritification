@@ -26,8 +26,8 @@ private:
   const SystemZSubtarget *Subtarget;
 
 public:
-  SystemZAsmPrinter(TargetMachine &TM, std::unique_ptr<MCStreamer> Streamer)
-      : AsmPrinter(TM, std::move(Streamer)) {
+  SystemZAsmPrinter(TargetMachine &TM, MCStreamer &Streamer)
+    : AsmPrinter(TM, Streamer) {
     Subtarget = &TM.getSubtarget<SystemZSubtarget>();
   }
 

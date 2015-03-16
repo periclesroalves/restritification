@@ -9,7 +9,7 @@
 
 LEVEL := ../..
 TOOLNAME := llvm-dwarfdump
-LINK_COMPONENTS := DebugInfoDWARF Object
+LINK_COMPONENTS := DebugInfo Object
 
 # This tool has no plugins, optimize startup time.
 TOOL_NO_EXPORTS := 1

@@ -50,8 +50,10 @@ void HexagonFrameLowering::determineFrameLayout(MachineFunction &MF) const {
   unsigned FrameSize = MFI->getStackSize();
 
   // Get the alignments provided by the target.
-  unsigned TargetAlign =
-      MF.getSubtarget().getFrameLowering()->getStackAlignment();
+  unsigned TargetAlign = MF.getTarget()
+                             .getSubtargetImpl()
+                             ->getFrameLowering()
+                             ->getStackAlignment();
   // Get the maximum call frame size of all the calls.
   unsigned maxCallFrameSize = MFI->getMaxCallFrameSize();
 
@@ -78,8 +80,8 @@ void HexagonFrameLowering::emitPrologue(MachineFunction &MF) const {
   MachineBasicBlock &MBB = MF.front();
   MachineFrameInfo *MFI = MF.getFrameInfo();
   MachineBasicBlock::iterator MBBI = MBB.begin();
-  const HexagonRegisterInfo *QRI =
-      MF.getSubtarget<HexagonSubtarget>().getRegisterInfo();
+  const HexagonRegisterInfo *QRI = static_cast<const HexagonRegisterInfo *>(
+      MF.getSubtarget().getRegisterInfo());
   DebugLoc dl = MBBI != MBB.end() ? MBBI->getDebugLoc() : DebugLoc();
   determineFrameLayout(MF);
 
@@ -166,7 +168,7 @@ void HexagonFrameLowering::emitEpilogue(MachineFunction &MF,
     }
     // Replace 'jumpr r31' instruction with dealloc_return for V4 and higher
     // versions.
-    if (MF.getSubtarget<HexagonSubtarget>().hasV4TOps() &&
+    if (MF.getTarget().getSubtarget<HexagonSubtarget>().hasV4TOps() &&
         MBBI->getOpcode() == Hexagon::JMPret && !DisableDeallocRet) {
       // Check for RESTORE_DEALLOC_RET_JMP_V4 call. Don't emit an extra DEALLOC
       // instruction if we encounter it.

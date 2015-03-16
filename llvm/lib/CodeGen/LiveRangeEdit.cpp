@@ -256,8 +256,15 @@ void LiveRangeEdit::eliminateDeadDef(MachineInstr *MI, ToShrinkSet &ToShrink) {
       // Check if MI reads any unreserved physregs.
       if (Reg && MOI->readsReg() && !MRI.isReserved(Reg))
         ReadsPhysRegs = true;
-      else if (MOI->isDef())
-        LIS.removePhysRegDefAt(Reg, Idx);
+      else if (MOI->isDef()) {
+        for (MCRegUnitIterator Units(Reg, MRI.getTargetRegisterInfo());
+             Units.isValid(); ++Units) {
+          if (LiveRange *LR = LIS.getCachedRegUnit(*Units)) {
+            if (VNInfo *VNI = LR->getVNInfoAt(Idx))
+              LR->removeValNo(VNI);
+          }
+        }
+      }
       continue;
     }
     LiveInterval &LI = LIS.getInterval(Reg);
@@ -273,11 +280,21 @@ void LiveRangeEdit::eliminateDeadDef(MachineInstr *MI, ToShrinkSet &ToShrink) {
 
     // Remove defined value.
     if (MOI->isDef()) {
-      if (TheDelegate && LI.getVNInfoAt(Idx) != nullptr)
-        TheDelegate->LRE_WillShrinkVirtReg(LI.reg);
-      LIS.removeVRegDefAt(LI, Idx);
-      if (LI.empty())
-        RegsToErase.push_back(Reg);
+      if (VNInfo *VNI = LI.getVNInfoAt(Idx)) {
+        if (TheDelegate)
+          TheDelegate->LRE_WillShrinkVirtReg(LI.reg);
+        LI.removeValNo(VNI);
+        if (LI.empty()) {
+          RegsToErase.push_back(Reg);
+        } else {
+          // Also remove the value in subranges.
+          for (LiveInterval::SubRange &S : LI.subranges()) {
+            if (VNInfo *SVNI = S.getVNInfoAt(Idx))
+              S.removeValNo(SVNI);
+          }
+          LI.removeEmptySubRanges();
+        }
+      }
     }
   }
 
@@ -399,7 +416,7 @@ LiveRangeEdit::calculateRegClassAndHint(MachineFunction &MF,
   VirtRegAuxInfo VRAI(MF, LIS, Loops, MBFI);
   for (unsigned I = 0, Size = size(); I < Size; ++I) {
     LiveInterval &LI = LIS.getInterval(get(I));
-    if (MRI.recomputeRegClass(LI.reg))
+    if (MRI.recomputeRegClass(LI.reg, MF.getTarget()))
       DEBUG({
         const TargetRegisterInfo *TRI = MF.getSubtarget().getRegisterInfo();
         dbgs() << "Inflated " << PrintReg(LI.reg) << " to "

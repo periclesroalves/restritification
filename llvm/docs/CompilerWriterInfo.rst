@@ -41,8 +41,6 @@ MIPS
 
 * `MIPS Processor Architecture <http://imgtec.com/mips/mips-architectures.asp>`_
 
-* `MIPS 64-bit ELF Object File Specification <http://techpubs.sgi.com/library/manuals/4000/007-4658-001/pdf/007-4658-001.pdf>`_
-
 PowerPC
 -------
 

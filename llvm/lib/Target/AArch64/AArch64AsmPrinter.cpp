@@ -51,8 +51,8 @@ class AArch64AsmPrinter : public AsmPrinter {
   StackMaps SM;
 
 public:
-  AArch64AsmPrinter(TargetMachine &TM, std::unique_ptr<MCStreamer> Streamer)
-      : AsmPrinter(TM, std::move(Streamer)),
+  AArch64AsmPrinter(TargetMachine &TM, MCStreamer &Streamer)
+      : AsmPrinter(TM, Streamer),
         Subtarget(&TM.getSubtarget<AArch64Subtarget>()),
         MCInstLowering(OutContext, *this), SM(*this), AArch64FI(nullptr),
         LOHLabelCounter(0) {}
@@ -145,7 +145,7 @@ void AArch64AsmPrinter::EmitEndOfAsmFile(Module &M) {
     MachineModuleInfoELF::SymbolListTy Stubs = MMIELF.GetGVStubList();
     if (!Stubs.empty()) {
       OutStreamer.SwitchSection(TLOFELF.getDataRelSection());
-      const DataLayout *TD = TM.getDataLayout();
+      const DataLayout *TD = TM.getSubtargetImpl()->getDataLayout();
 
       for (unsigned i = 0, e = Stubs.size(); i != e; ++i) {
         OutStreamer.EmitLabel(Stubs[i].first);

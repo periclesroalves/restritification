@@ -27,7 +27,6 @@
 #include "llvm/Support/CommandLine.h"
 #include "llvm/Support/ErrorHandling.h"
 #include "llvm/Support/ToolOutputFile.h"
-#include "llvm/Target/TargetMachine.h"
 
 using namespace llvm;
 using namespace opt_tool;
@@ -37,19 +36,16 @@ static cl::opt<bool>
             cl::desc("Print pass management debugging information"));
 
 bool llvm::runPassPipeline(StringRef Arg0, LLVMContext &Context, Module &M,
-                           TargetMachine *TM, tool_output_file *Out,
-                           StringRef PassPipeline, OutputKind OK,
-                           VerifierKind VK) {
-  Passes P(TM);
-
+                           tool_output_file *Out, StringRef PassPipeline,
+                           OutputKind OK, VerifierKind VK) {
   FunctionAnalysisManager FAM(DebugPM);
   CGSCCAnalysisManager CGAM(DebugPM);
   ModuleAnalysisManager MAM(DebugPM);
 
   // Register all the basic analyses with the managers.
-  P.registerModuleAnalyses(MAM);
-  P.registerCGSCCAnalyses(CGAM);
-  P.registerFunctionAnalyses(FAM);
+  registerModuleAnalyses(MAM);
+  registerCGSCCAnalyses(CGAM);
+  registerFunctionAnalyses(FAM);
 
   // Cross register the analysis managers through their proxies.
   MAM.registerPass(FunctionAnalysisManagerModuleProxy(FAM));
@@ -63,8 +59,7 @@ bool llvm::runPassPipeline(StringRef Arg0, LLVMContext &Context, Module &M,
   if (VK > VK_NoVerifier)
     MPM.addPass(VerifierPass());
 
-  if (!P.parsePassPipeline(MPM, PassPipeline, VK == VK_VerifyEachPass,
-                           DebugPM)) {
+  if (!parsePassPipeline(MPM, PassPipeline, VK == VK_VerifyEachPass, DebugPM)) {
     errs() << Arg0 << ": unable to parse pass pipeline description.\n";
     return false;
   }

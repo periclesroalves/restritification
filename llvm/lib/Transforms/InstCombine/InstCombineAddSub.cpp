@@ -11,7 +11,7 @@
 //
 //===----------------------------------------------------------------------===//
 
-#include "InstCombineInternal.h"
+#include "InstCombine.h"
 #include "llvm/ADT/STLExtras.h"
 #include "llvm/Analysis/InstructionSimplify.h"
 #include "llvm/IR/DataLayout.h"

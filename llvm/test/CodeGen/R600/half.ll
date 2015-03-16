@@ -1,5 +1,4 @@
 ; RUN: llc < %s -march=amdgcn -mcpu=SI | FileCheck %s
-; RUN: llc < %s -march=amdgcn -mcpu=tonga | FileCheck %s
 
 define void @test_load_store(half addrspace(1)* %in, half addrspace(1)* %out) {
 ; CHECK-LABEL: {{^}}test_load_store:

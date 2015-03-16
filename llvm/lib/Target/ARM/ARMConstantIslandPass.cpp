@@ -383,9 +383,11 @@ bool ARMConstantIslands::runOnMachineFunction(MachineFunction &mf) {
                << MCP->getConstants().size() << " CP entries, aligned to "
                << MCP->getConstantPoolAlignment() << " bytes *****\n");
 
-  STI = &static_cast<const ARMSubtarget &>(MF->getSubtarget());
-  TII = STI->getInstrInfo();
+  TII = (const ARMBaseInstrInfo *)MF->getTarget()
+            .getSubtargetImpl()
+            ->getInstrInfo();
   AFI = MF->getInfo<ARMFunctionInfo>();
+  STI = &MF->getTarget().getSubtarget<ARMSubtarget>();
 
   isThumb = AFI->isThumbFunction();
   isThumb1 = AFI->isThumb1OnlyFunction();
@@ -530,7 +532,7 @@ ARMConstantIslands::doInitialPlacement(std::vector<MachineInstr*> &CPEMIs) {
   // identity mapping of CPI's to CPE's.
   const std::vector<MachineConstantPoolEntry> &CPs = MCP->getConstants();
 
-  const DataLayout &TD = *MF->getTarget().getDataLayout();
+  const DataLayout &TD = *MF->getSubtarget().getDataLayout();
   for (unsigned i = 0, e = CPs.size(); i != e; ++i) {
     unsigned Size = TD.getTypeAllocSize(CPs[i].getType());
     assert(Size >= 4 && "Too small constant pool entry");

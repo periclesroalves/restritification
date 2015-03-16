@@ -32,13 +32,13 @@ namespace {
 class SparcDAGToDAGISel : public SelectionDAGISel {
   /// Subtarget - Keep a pointer to the Sparc Subtarget around so that we can
   /// make the right decision when generating code for different targets.
-  const SparcSubtarget *Subtarget;
+  const SparcSubtarget &Subtarget;
+  SparcTargetMachine &TM;
 public:
-  explicit SparcDAGToDAGISel(SparcTargetMachine &tm) : SelectionDAGISel(tm) {}
-
-  bool runOnMachineFunction(MachineFunction &MF) override {
-    Subtarget = &MF.getSubtarget<SparcSubtarget>();
-    return SelectionDAGISel::runOnMachineFunction(MF);
+  explicit SparcDAGToDAGISel(SparcTargetMachine &tm)
+    : SelectionDAGISel(tm),
+      Subtarget(tm.getSubtarget<SparcSubtarget>()),
+      TM(tm) {
   }
 
   SDNode *Select(SDNode *N) override;
@@ -66,7 +66,8 @@ private:
 }  // end anonymous namespace
 
 SDNode* SparcDAGToDAGISel::getGlobalBaseReg() {
-  unsigned GlobalBaseReg = Subtarget->getInstrInfo()->getGlobalBaseReg(MF);
+  unsigned GlobalBaseReg =
+      TM.getSubtargetImpl()->getInstrInfo()->getGlobalBaseReg(MF);
   return CurDAG->getRegister(GlobalBaseReg, TLI->getPointerTy()).getNode();
 }
 

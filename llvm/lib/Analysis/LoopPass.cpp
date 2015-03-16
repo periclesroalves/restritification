@@ -187,15 +187,14 @@ static void addLoopIntoQueue(Loop *L, std::deque<Loop *> &LQ) {
 void LPPassManager::getAnalysisUsage(AnalysisUsage &Info) const {
   // LPPassManager needs LoopInfo. In the long term LoopInfo class will
   // become part of LPPassManager.
-  Info.addRequired<LoopInfoWrapperPass>();
+  Info.addRequired<LoopInfo>();
   Info.setPreservesAll();
 }
 
 /// run - Execute all of the passes scheduled for execution.  Keep track of
 /// whether any of the passes modifies the function, and if so, return true.
 bool LPPassManager::runOnFunction(Function &F) {
-  auto &LIWP = getAnalysis<LoopInfoWrapperPass>();
-  LI = &LIWP.getLoopInfo();
+  LI = &getAnalysis<LoopInfo>();
   bool Changed = false;
 
   // Collect inherited analysis from Module level pass manager.
@@ -263,7 +262,7 @@ bool LPPassManager::runOnFunction(Function &F) {
         // loop in the function every time. That level of checking can be
         // enabled with the -verify-loop-info option.
         {
-          TimeRegion PassTimer(getPassTimer(&LIWP));
+          TimeRegion PassTimer(getPassTimer(LI));
           CurrentLoop->verifyLoop();
         }
 

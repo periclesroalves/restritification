@@ -21,7 +21,7 @@
 #include "llvm/IR/InstIterator.h"
 #include "llvm/IR/Instruction.h"
 #include "llvm/Pass.h"
-#include "llvm/Analysis/TargetLibraryInfo.h"
+#include "llvm/Target/TargetLibraryInfo.h"
 #include "llvm/Transforms/Utils/Local.h"
 using namespace llvm;
 
@@ -42,8 +42,7 @@ namespace {
     bool runOnBasicBlock(BasicBlock &BB) override {
       if (skipOptnoneFunction(BB))
         return false;
-      auto *TLIP = getAnalysisIfAvailable<TargetLibraryInfoWrapperPass>();
-      TargetLibraryInfo *TLI = TLIP ? &TLIP->getTLI() : nullptr;
+      TargetLibraryInfo *TLI = getAnalysisIfAvailable<TargetLibraryInfo>();
       bool Changed = false;
       for (BasicBlock::iterator DI = BB.begin(); DI != BB.end(); ) {
         Instruction *Inst = DI++;
@@ -96,8 +95,7 @@ bool DCE::runOnFunction(Function &F) {
   if (skipOptnoneFunction(F))
     return false;
 
-  auto *TLIP = getAnalysisIfAvailable<TargetLibraryInfoWrapperPass>();
-  TargetLibraryInfo *TLI = TLIP ? &TLIP->getTLI() : nullptr;
+  TargetLibraryInfo *TLI = getAnalysisIfAvailable<TargetLibraryInfo>();
 
   // Start out with all of the instructions in the worklist...
   std::vector<Instruction*> WorkList;

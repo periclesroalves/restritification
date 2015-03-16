@@ -6,9 +6,6 @@
 /* Exported configuration */
 #include "llvm/Config/llvm-config.h"
 
-/* Patch version of the LLVM API */
-#cmakedefine LLVM_VERSION_PATCH ${LLVM_VERSION_PATCH}
-
 /* Bug report URL. */
 #define BUG_REPORT_URL "${BUG_REPORT_URL}"
 
@@ -426,9 +423,6 @@
 /* Have host's __chkstk */
 #cmakedefine HAVE___CHKSTK ${HAVE___CHKSTK}
 
-/* Have host's __chkstk_ms */
-#cmakedefine HAVE___CHKSTK_MS ${HAVE___CHKSTK_MS}
-
 /* Have host's __cmpdi2 */
 #cmakedefine HAVE___CMPDI2 ${HAVE___CMPDI2}
 
@@ -464,9 +458,6 @@
 
 /* Have host's ___chkstk */
 #cmakedefine HAVE____CHKSTK ${HAVE____CHKSTK}
-
-/* Have host's ___chkstk_ms */
-#cmakedefine HAVE____CHKSTK_MS ${HAVE____CHKSTK_MS}
 
 /* Define if we link Polly to the tools */
 #cmakedefine LINK_POLLY_INTO_TOOLS

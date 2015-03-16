@@ -1,5 +1,4 @@
 ; RUN: llc -march=amdgcn -mcpu=SI -verify-machineinstrs < %s | FileCheck -check-prefix=SI %s
-; RUN: llc -march=amdgcn -mcpu=tonga -verify-machineinstrs < %s | FileCheck -check-prefix=SI %s
 
 ; SI-LABEL: {{^}}s_sext_i1_to_i32:
 ; SI: v_cndmask_b32_e64

@@ -1,5 +1,4 @@
 ; RUN: llc -march=amdgcn -mcpu=SI < %s
-; RUN: llc -march=amdgcn -mcpu=tonga < %s
 ; CHECK: s_endpgm
 
 @gv = external unnamed_addr addrspace(2) constant [239 x i32], align 4

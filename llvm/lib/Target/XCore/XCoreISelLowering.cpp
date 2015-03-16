@@ -68,9 +68,9 @@ getTargetNodeName(unsigned Opcode) const
   }
 }
 
-XCoreTargetLowering::XCoreTargetLowering(const TargetMachine &TM,
-                                         const XCoreSubtarget &Subtarget)
-    : TargetLowering(TM), TM(TM), Subtarget(Subtarget) {
+XCoreTargetLowering::XCoreTargetLowering(const TargetMachine &TM)
+    : TargetLowering(TM), TM(TM),
+      Subtarget(TM.getSubtarget<XCoreSubtarget>()) {
 
   // Set up the register classes.
   addRegisterClass(MVT::i32, &XCore::GRRegsRegClass);
@@ -807,7 +807,8 @@ SDValue XCoreTargetLowering::LowerFRAMEADDR(SDValue Op,
     return SDValue();
 
   MachineFunction &MF = DAG.getMachineFunction();
-  const TargetRegisterInfo *RegInfo = Subtarget.getRegisterInfo();
+  const TargetRegisterInfo *RegInfo =
+      getTargetMachine().getSubtargetImpl()->getRegisterInfo();
   return DAG.getCopyFromReg(DAG.getEntryNode(), SDLoc(Op),
                             RegInfo->getFrameRegister(MF), MVT::i32);
 }
@@ -853,7 +854,8 @@ LowerEH_RETURN(SDValue Op, SelectionDAG &DAG) const {
   SDLoc dl(Op);
 
   // Absolute SP = (FP + FrameToArgs) + Offset
-  const TargetRegisterInfo *RegInfo = Subtarget.getRegisterInfo();
+  const TargetRegisterInfo *RegInfo =
+      getTargetMachine().getSubtargetImpl()->getRegisterInfo();
   SDValue Stack = DAG.getCopyFromReg(DAG.getEntryNode(), dl,
                             RegInfo->getFrameRegister(MF), MVT::i32);
   SDValue FrameToArgs = DAG.getNode(XCoreISD::FRAME_TO_ARGS_OFFSET, dl,
@@ -1548,7 +1550,8 @@ XCoreTargetLowering::LowerReturn(SDValue Chain,
 MachineBasicBlock *
 XCoreTargetLowering::EmitInstrWithCustomInserter(MachineInstr *MI,
                                                  MachineBasicBlock *BB) const {
-  const TargetInstrInfo &TII = *Subtarget.getInstrInfo();
+  const TargetInstrInfo &TII =
+      *getTargetMachine().getSubtargetImpl()->getInstrInfo();
   DebugLoc dl = MI->getDebugLoc();
   assert((MI->getOpcode() == XCore::SELECT_CC) &&
          "Unexpected instr type to insert");
@@ -1921,7 +1924,7 @@ XCoreTargetLowering::isLegalAddressingMode(const AddrMode &AM,
   if (Ty->getTypeID() == Type::VoidTyID)
     return AM.Scale == 0 && isImmUs(AM.BaseOffs) && isImmUs4(AM.BaseOffs);
 
-  const DataLayout *TD = TM.getDataLayout();
+  const DataLayout *TD = TM.getSubtargetImpl()->getDataLayout();
   unsigned Size = TD->getTypeAllocSize(Ty);
   if (AM.BaseGV) {
     return Size >= 4 && !AM.HasBaseReg && AM.Scale == 0 &&

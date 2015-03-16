@@ -29,7 +29,7 @@
 #include "llvm/Support/CommandLine.h"
 #include "llvm/Support/Debug.h"
 #include "llvm/Support/raw_ostream.h"
-#include "llvm/Analysis/TargetLibraryInfo.h"
+#include "llvm/Target/TargetLibraryInfo.h"
 #include "llvm/Transforms/Utils/Cloning.h"
 #include "llvm/Transforms/Utils/Local.h"
 using namespace llvm;
@@ -446,8 +446,7 @@ bool Inliner::runOnSCC(CallGraphSCC &SCC) {
   AssumptionCacheTracker *ACT = &getAnalysis<AssumptionCacheTracker>();
   DataLayoutPass *DLP = getAnalysisIfAvailable<DataLayoutPass>();
   const DataLayout *DL = DLP ? &DLP->getDataLayout() : nullptr;
-  auto *TLIP = getAnalysisIfAvailable<TargetLibraryInfoWrapperPass>();
-  const TargetLibraryInfo *TLI = TLIP ? &TLIP->getTLI() : nullptr;
+  const TargetLibraryInfo *TLI = getAnalysisIfAvailable<TargetLibraryInfo>();
   AliasAnalysis *AA = &getAnalysis<AliasAnalysis>();
 
   SmallPtrSet<Function*, 8> SCCFunctions;

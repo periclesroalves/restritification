@@ -46,7 +46,7 @@ static bool finishStackBlock(SmallVectorImpl<CCValAssign> &PendingMembers,
                              CCState &State, unsigned SlotAlign) {
   unsigned Size = LocVT.getSizeInBits() / 8;
   unsigned StackAlign = State.getMachineFunction()
-                            .getTarget()
+                            .getSubtarget()
                             .getDataLayout()
                             ->getStackAlignment();
   unsigned Align = std::min(ArgFlags.getOrigAlign(), StackAlign);

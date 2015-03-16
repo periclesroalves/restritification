@@ -17,7 +17,6 @@
 #include "MCTargetDesc/PPCPredicates.h"
 #include "PPCCallingConv.h"
 #include "PPCISelLowering.h"
-#include "PPCMachineFunctionInfo.h"
 #include "PPCSubtarget.h"
 #include "PPCTargetMachine.h"
 #include "llvm/ADT/Optional.h"
@@ -86,20 +85,18 @@ typedef struct Address {
 class PPCFastISel final : public FastISel {
 
   const TargetMachine &TM;
-  const PPCSubtarget *PPCSubTarget;
-  PPCFunctionInfo *PPCFuncInfo;
   const TargetInstrInfo &TII;
   const TargetLowering &TLI;
+  const PPCSubtarget *PPCSubTarget;
   LLVMContext *Context;
 
   public:
     explicit PPCFastISel(FunctionLoweringInfo &FuncInfo,
                          const TargetLibraryInfo *LibInfo)
         : FastISel(FuncInfo, LibInfo), TM(FuncInfo.MF->getTarget()),
-          PPCSubTarget(&FuncInfo.MF->getSubtarget<PPCSubtarget>()),
-          PPCFuncInfo(FuncInfo.MF->getInfo<PPCFunctionInfo>()),
-          TII(*PPCSubTarget->getInstrInfo()),
-          TLI(*PPCSubTarget->getTargetLowering()),
+          TII(*TM.getSubtargetImpl()->getInstrInfo()),
+          TLI(*TM.getSubtargetImpl()->getTargetLowering()),
+          PPCSubTarget(&TM.getSubtarget<PPCSubtarget>()),
           Context(&FuncInfo.Fn->getContext()) {}
 
   // Backend specific FastISel code.
@@ -1278,7 +1275,7 @@ bool PPCFastISel::processCallArgs(SmallVectorImpl<Value*> &Args,
 
   // Prepare to assign register arguments.  Every argument uses up a
   // GPR protocol register even if it's passed in a floating-point
-  // register (unless we're using the fast calling convention).
+  // register.
   unsigned NextGPR = PPC::X3;
   unsigned NextFPR = PPC::F1;
 
@@ -1328,8 +1325,7 @@ bool PPCFastISel::processCallArgs(SmallVectorImpl<Value*> &Args,
     unsigned ArgReg;
     if (ArgVT == MVT::f32 || ArgVT == MVT::f64) {
       ArgReg = NextFPR++;
-      if (CC != CallingConv::Fast)
-        ++NextGPR;
+      ++NextGPR;
     } else
       ArgReg = NextGPR++;
 
@@ -1527,10 +1523,9 @@ bool PPCFastISel::fastLowerCall(CallLoweringInfo &CLI) {
   for (unsigned II = 0, IE = RegArgs.size(); II != IE; ++II)
     MIB.addReg(RegArgs[II], RegState::Implicit);
 
-  // Direct calls, in both the ELF V1 and V2 ABIs, need the TOC register live
-  // into the call.
-  PPCFuncInfo->setUsesTOCBasePtr();
-  MIB.addReg(PPC::X2, RegState::Implicit);
+  // Direct calls in the ELFv2 ABI need the TOC register live into the call.
+  if (PPCSubTarget->isELFv2ABI())
+    MIB.addReg(PPC::X2, RegState::Implicit);
 
   // Add a register mask with the call-preserved registers.  Proper
   // defs for return values will be added by setPhysRegsDeadExcept().
@@ -1868,7 +1863,6 @@ unsigned PPCFastISel::PPCMaterializeFP(const ConstantFP *CFP, MVT VT) {
   unsigned Opc = (VT == MVT::f32) ? PPC::LFS : PPC::LFD;
   unsigned TmpReg = createResultReg(&PPC::G8RC_and_G8RC_NOX0RegClass);
 
-  PPCFuncInfo->setUsesTOCBasePtr();
   // For small code model, generate a LF[SD](0, LDtocCPT(Idx, X2)).
   if (CModel == CodeModel::Small || CModel == CodeModel::JITDefault) {
     BuildMI(*FuncInfo.MBB, FuncInfo.InsertPt, DbgLoc, TII.get(PPC::LDtocCPT),
@@ -1918,7 +1912,6 @@ unsigned PPCFastISel::PPCMaterializeGV(const GlobalValue *GV, MVT VT) {
   if (GV->isThreadLocal())
     return 0;
 
-  PPCFuncInfo->setUsesTOCBasePtr();
   // For small code model, generate a simple TOC load.
   if (CModel == CodeModel::Small || CModel == CodeModel::JITDefault)
     BuildMI(*FuncInfo.MBB, FuncInfo.InsertPt, DbgLoc, TII.get(PPC::LDtoc),
@@ -2304,10 +2297,13 @@ namespace llvm {
   // Create the fast instruction selector for PowerPC64 ELF.
   FastISel *PPC::createFastISel(FunctionLoweringInfo &FuncInfo,
                                 const TargetLibraryInfo *LibInfo) {
+    const TargetMachine &TM = FuncInfo.MF->getTarget();
+
     // Only available on 64-bit ELF for now.
-    const PPCSubtarget &Subtarget = FuncInfo.MF->getSubtarget<PPCSubtarget>();
-    if (Subtarget.isPPC64() && Subtarget.isSVR4ABI())
+    const PPCSubtarget *Subtarget = &TM.getSubtarget<PPCSubtarget>();
+    if (Subtarget->isPPC64() && Subtarget->isSVR4ABI())
       return new PPCFastISel(FuncInfo, LibInfo);
+
     return nullptr;
   }
 }

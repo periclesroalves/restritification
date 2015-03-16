@@ -15,7 +15,6 @@
 #include "llvm/ADT/STLExtras.h"
 #include "llvm/ADT/SmallPtrSet.h"
 #include "llvm/IR/Constants.h"
-#include "llvm/IR/DebugInfoMetadata.h"
 #include "llvm/IR/DerivedTypes.h"
 #include "llvm/IR/Instructions.h"
 #include "llvm/IR/Module.h"
@@ -409,6 +408,12 @@ unsigned ValueEnumerator::getValueID(const Value *V) const {
   ValueMapType::const_iterator I = ValueMap.find(V);
   assert(I != ValueMap.end() && "Value not in slotcalculator!");
   return I->second-1;
+}
+
+unsigned ValueEnumerator::getMetadataID(const Metadata *MD) const {
+  auto I = MDValueMap.find(MD);
+  assert(I != MDValueMap.end() && "Metadata not in slotcalculator!");
+  return I->second - 1;
 }
 
 void ValueEnumerator::dump() const {

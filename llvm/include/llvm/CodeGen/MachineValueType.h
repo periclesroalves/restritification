@@ -152,11 +152,7 @@ namespace llvm {
 
       // iPTR - An int value the size of the pointer of the current
       // target.  This should only be used internal to tblgen!
-      iPTR           = 255,
-
-      // Any - Any type. This is used for intrinsics that have overloadings.
-      // This is only for tblgen's consumption!
-      Any            = 256
+      iPTR           = 255
     };
 
     SimpleValueType SimpleTy;
@@ -249,8 +245,7 @@ namespace llvm {
 
     /// isOverloaded - Return true if this is an overloaded type for TableGen.
     bool isOverloaded() const {
-      return (SimpleTy==MVT::Any  ||
-              SimpleTy==MVT::iAny || SimpleTy==MVT::fAny ||
+      return (SimpleTy==MVT::iAny || SimpleTy==MVT::fAny ||
               SimpleTy==MVT::vAny || SimpleTy==MVT::iPTRAny);
     }
 
@@ -385,7 +380,6 @@ namespace llvm {
       case iAny:
       case fAny:
       case vAny:
-      case Any:
         llvm_unreachable("Value type is overloaded.");
       case Metadata:
         llvm_unreachable("Value type is metadata.");

@@ -1,7 +1,6 @@
-; RUN: llc < %s -march=x86 -mattr=-sse2,-sse4a | FileCheck %s
+; RUN: llc < %s -march=x86 -mattr=-sse2 | grep lock
 
 define void @test() {
-; CHECK: lock
 	fence seq_cst
 	ret void
 }

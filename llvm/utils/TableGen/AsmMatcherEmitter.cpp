@@ -979,7 +979,6 @@ static std::string getEnumNameForToken(StringRef Str) {
     case '.': Res += "_DOT_"; break;
     case '<': Res += "_LT_"; break;
     case '>': Res += "_GT_"; break;
-    case '-': Res += "_MINUS_"; break;
     default:
       if ((*it >= 'A' && *it <= 'Z') ||
           (*it >= 'a' && *it <= 'z') ||
@@ -1849,7 +1848,6 @@ static void emitConvertFuncs(CodeGenTarget &Target, StringRef ClassName,
       case MatchableInfo::ResOperand::ImmOperand: {
         int64_t Val = OpInfo.ImmVal;
         std::string Ty = "imm_" + itostr(Val);
-        Ty = getEnumNameForToken(Ty);
         Signature += "__" + Ty;
 
         std::string Name = "CVT_" + Ty;
@@ -2653,7 +2651,7 @@ void AsmMatcherEmitter::run(raw_ostream &OS) {
      << " bool matchingInlineAsm,\n"
      << "                                unsigned VariantID = 0);\n";
 
-  if (!Info.OperandMatchInfo.empty()) {
+  if (Info.OperandMatchInfo.size()) {
     OS << "\n  enum OperandMatchResultTy {\n";
     OS << "    MatchOperand_Success,    // operand matched successfully\n";
     OS << "    MatchOperand_NoMatch,    // operand did not match\n";
@@ -3011,7 +3009,7 @@ void AsmMatcherEmitter::run(raw_ostream &OS) {
   OS << "  return Match_MissingFeature;\n";
   OS << "}\n\n";
 
-  if (!Info.OperandMatchInfo.empty())
+  if (Info.OperandMatchInfo.size())
     emitCustomOperandParsing(OS, Target, Info, ClassName, StringTable,
                              MaxMnemonicIndex);
 

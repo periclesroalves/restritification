@@ -17,7 +17,6 @@
 #include "MipsInstrInfo.h"
 #include "MipsMachineFunction.h"
 #include "MipsSubtarget.h"
-#include "MipsTargetMachine.h"
 #include "llvm/ADT/BitVector.h"
 #include "llvm/ADT/STLExtras.h"
 #include "llvm/CodeGen/MachineFrameInfo.h"
@@ -63,7 +62,7 @@ MipsRegisterInfo::getRegPressureLimit(const TargetRegisterClass *RC,
   case Mips::GPR32RegClassID:
   case Mips::GPR64RegClassID:
   case Mips::DSPRRegClassID: {
-    const TargetFrameLowering *TFI = Subtarget.getFrameLowering();
+    const TargetFrameLowering *TFI = MF.getSubtarget().getFrameLowering();
     return 28 - TFI->hasFP(MF);
   }
   case Mips::FGR32RegClassID:
@@ -168,7 +167,7 @@ getReservedRegs(const MachineFunction &MF) const {
       Reserved.set(*Reg);
   }
   // Reserve FP if this function should have a dedicated frame pointer register.
-  if (Subtarget.getFrameLowering()->hasFP(MF)) {
+  if (MF.getSubtarget().getFrameLowering()->hasFP(MF)) {
     if (Subtarget.inMips16Mode())
       Reserved.set(Mips::S0);
     else {
@@ -257,9 +256,8 @@ eliminateFrameIndex(MachineBasicBlock::iterator II, int SPAdj,
 
 unsigned MipsRegisterInfo::
 getFrameRegister(const MachineFunction &MF) const {
-  const TargetFrameLowering *TFI = Subtarget.getFrameLowering();
-  bool IsN64 =
-      static_cast<const MipsTargetMachine &>(MF.getTarget()).getABI().IsN64();
+  const TargetFrameLowering *TFI = MF.getSubtarget().getFrameLowering();
+  bool IsN64 = Subtarget.isABI_N64();
 
   if (Subtarget.inMips16Mode())
     return TFI->hasFP(MF) ? Mips::S0 : Mips::SP;

@@ -12,7 +12,6 @@
 //===----------------------------------------------------------------------===//
 
 #include "llvm/Target/TargetMachine.h"
-#include "llvm/Analysis/TargetTransformInfo.h"
 #include "llvm/CodeGen/MachineFunction.h"
 #include "llvm/IR/Function.h"
 #include "llvm/IR/GlobalAlias.h"
@@ -25,7 +24,6 @@
 #include "llvm/MC/MCSectionMachO.h"
 #include "llvm/MC/MCTargetOptions.h"
 #include "llvm/MC/SectionKind.h"
-#include "llvm/PassManager.h"
 #include "llvm/Support/CommandLine.h"
 #include "llvm/Target/TargetLowering.h"
 #include "llvm/Target/TargetLoweringObjectFile.h"
@@ -170,11 +168,6 @@ void TargetMachine::setFunctionSections(bool V) {
 
 void TargetMachine::setDataSections(bool V) {
   Options.DataSections = V;
-}
-
-TargetIRAnalysis TargetMachine::getTargetIRAnalysis() {
-  return TargetIRAnalysis(
-      [this](Function &) { return TargetTransformInfo(getDataLayout()); });
 }
 
 static bool canUsePrivateLabel(const MCAsmInfo &AsmInfo,

@@ -20,7 +20,6 @@
 #include "llvm/Analysis/AliasAnalysis.h"
 #include "llvm/Analysis/BranchProbabilityInfo.h"
 #include "llvm/Analysis/ConstantFolding.h"
-#include "llvm/Analysis/TargetLibraryInfo.h"
 #include "llvm/Analysis/ValueTracking.h"
 #include "llvm/CodeGen/Analysis.h"
 #include "llvm/CodeGen/FastISel.h"
@@ -58,6 +57,7 @@
 #include "llvm/Target/TargetFrameLowering.h"
 #include "llvm/Target/TargetInstrInfo.h"
 #include "llvm/Target/TargetIntrinsicInfo.h"
+#include "llvm/Target/TargetLibraryInfo.h"
 #include "llvm/Target/TargetLowering.h"
 #include "llvm/Target/TargetOptions.h"
 #include "llvm/Target/TargetSelectionDAGInfo.h"
@@ -869,7 +869,7 @@ void SelectionDAGBuilder::init(GCFunctionInfo *gfi, AliasAnalysis &aa,
   AA = &aa;
   GFI = gfi;
   LibInfo = li;
-  DL = DAG.getTarget().getDataLayout();
+  DL = DAG.getSubtarget().getDataLayout();
   Context = DAG.getContext();
   LPadToCallSiteMap.clear();
 }
@@ -2071,14 +2071,10 @@ void SelectionDAGBuilder::visitLandingPad(const LandingPadInst &LP) {
   // Get the two live-in registers as SDValues. The physregs have already been
   // copied into virtual registers.
   SDValue Ops[2];
-  if (FuncInfo.ExceptionPointerVirtReg) {
-    Ops[0] = DAG.getZExtOrTrunc(
-        DAG.getCopyFromReg(DAG.getEntryNode(), getCurSDLoc(),
-                           FuncInfo.ExceptionPointerVirtReg, TLI.getPointerTy()),
-        getCurSDLoc(), ValueVTs[0]);
-  } else {
-    Ops[0] = DAG.getConstant(0, TLI.getPointerTy());
-  }
+  Ops[0] = DAG.getZExtOrTrunc(
+      DAG.getCopyFromReg(DAG.getEntryNode(), getCurSDLoc(),
+                         FuncInfo.ExceptionPointerVirtReg, TLI.getPointerTy()),
+      getCurSDLoc(), ValueVTs[0]);
   Ops[1] = DAG.getZExtOrTrunc(
       DAG.getCopyFromReg(DAG.getEntryNode(), getCurSDLoc(),
                          FuncInfo.ExceptionSelectorVirtReg, TLI.getPointerTy()),
@@ -2088,27 +2084,6 @@ void SelectionDAGBuilder::visitLandingPad(const LandingPadInst &LP) {
   SDValue Res = DAG.getNode(ISD::MERGE_VALUES, getCurSDLoc(),
                             DAG.getVTList(ValueVTs), Ops);
   setValue(&LP, Res);
-}
-
-unsigned
-SelectionDAGBuilder::visitLandingPadClauseBB(GlobalValue *ClauseGV,
-                                             MachineBasicBlock *LPadBB) {
-  SDValue Chain = getControlRoot();
-
-  // Get the typeid that we will dispatch on later.
-  const TargetLowering &TLI = DAG.getTargetLoweringInfo();
-  const TargetRegisterClass *RC = TLI.getRegClassFor(TLI.getPointerTy());
-  unsigned VReg = FuncInfo.MF->getRegInfo().createVirtualRegister(RC);
-  unsigned TypeID = DAG.getMachineFunction().getMMI().getTypeIDFor(ClauseGV);
-  SDValue Sel = DAG.getConstant(TypeID, TLI.getPointerTy());
-  Chain = DAG.getCopyToReg(Chain, getCurSDLoc(), VReg, Sel);
-
-  // Branch to the main landing pad block.
-  MachineBasicBlock *ClauseMBB = FuncInfo.MBB;
-  ClauseMBB->addSuccessor(LPadBB);
-  DAG.setRoot(DAG.getNode(ISD::BR, getCurSDLoc(), MVT::Other, Chain,
-                          DAG.getBasicBlock(LPadBB)));
-  return VReg;
 }
 
 /// handleSmallSwitchCaseRange - Emit a series of specific tests (suitable for
@@ -2397,8 +2372,17 @@ bool SelectionDAGBuilder::handleBTSplitSwitchCase(CaseRec& CR,
                                                   CaseRecVector& WorkList,
                                                   const Value* SV,
                                                   MachineBasicBlock* SwitchBB) {
+  // Get the MachineFunction which holds the current MBB.  This is used when
+  // inserting any additional MBBs necessary to represent the switch.
+  MachineFunction *CurMF = FuncInfo.MF;
+
+  // Figure out which block is immediately after the current one.
+  MachineFunction::iterator BBI = CR.CaseBB;
+  ++BBI;
+
   Case& FrontCase = *CR.Range.first;
   Case& BackCase  = *(CR.Range.second-1);
+  const BasicBlock *LLVMBB = CR.CaseBB->getBasicBlock();
 
   // Size is the number of Cases represented by this range.
   unsigned Size = CR.Range.second - CR.Range.first;
@@ -2420,7 +2404,6 @@ bool SelectionDAGBuilder::handleBTSplitSwitchCase(CaseRec& CR,
   DEBUG(dbgs() << "Selecting best pivot: \n"
                << "First: " << First << ", Last: " << Last <<'\n'
                << "LSize: " << LSize << ", RSize: " << RSize << '\n');
-  const TargetLowering &TLI = DAG.getTargetLoweringInfo();
   for (CaseItr I = CR.Range.first, J=I+1, E = CR.Range.second;
        J!=E; ++I, ++J) {
     const APInt &LEnd = cast<ConstantInt>(I->High)->getValue();
@@ -2430,17 +2413,13 @@ bool SelectionDAGBuilder::handleBTSplitSwitchCase(CaseRec& CR,
            "Invalid case distance");
     // Use volatile double here to avoid excess precision issues on some hosts,
     // e.g. that use 80-bit X87 registers.
-    // Only consider the density of sub-ranges that actually have sufficient
-    // entries to be lowered as a jump table.
     volatile double LDensity =
-        LSize.ult(TLI.getMinimumJumpTableEntries())
-            ? 0.0
-            : LSize.roundToDouble() / (LEnd - First + 1ULL).roundToDouble();
+       (double)LSize.roundToDouble() /
+                           (LEnd - First + 1ULL).roundToDouble();
     volatile double RDensity =
-        RSize.ult(TLI.getMinimumJumpTableEntries())
-            ? 0.0
-            : RSize.roundToDouble() / (Last - RBegin + 1ULL).roundToDouble();
-    volatile double Metric = Range.logBase2() * (LDensity + RDensity);
+      (double)RSize.roundToDouble() /
+                           (Last - RBegin + 1ULL).roundToDouble();
+    volatile double Metric = Range.logBase2()*(LDensity+RDensity);
     // Should always split in some non-trivial place
     DEBUG(dbgs() <<"=>Step\n"
                  << "LEnd: " << LEnd << ", RBegin: " << RBegin << '\n'
@@ -2457,25 +2436,13 @@ bool SelectionDAGBuilder::handleBTSplitSwitchCase(CaseRec& CR,
     RSize -= J->size();
   }
 
-  if (FMetric == 0 || !areJTsAllowed(TLI))
+  const TargetLowering &TLI = DAG.getTargetLoweringInfo();
+  if (areJTsAllowed(TLI)) {
+    // If our case is dense we *really* should handle it earlier!
+    assert((FMetric > 0) && "Should handle dense range earlier!");
+  } else {
     Pivot = CR.Range.first + Size/2;
-  splitSwitchCase(CR, Pivot, WorkList, SV, SwitchBB);
-  return true;
-}
-
-void SelectionDAGBuilder::splitSwitchCase(CaseRec &CR, CaseItr Pivot,
-                                          CaseRecVector &WorkList,
-                                          const Value *SV,
-                                          MachineBasicBlock *SwitchBB) {
-  // Get the MachineFunction which holds the current MBB.  This is used when
-  // inserting any additional MBBs necessary to represent the switch.
-  MachineFunction *CurMF = FuncInfo.MF;
-
-  // Figure out which block is immediately after the current one.
-  MachineFunction::iterator BBI = CR.CaseBB;
-  ++BBI;
-
-  const BasicBlock *LLVMBB = CR.CaseBB->getBasicBlock();
+  }
 
   CaseRange LHSR(CR.Range.first, Pivot);
   CaseRange RHSR(Pivot, CR.Range.second);
@@ -2488,9 +2455,10 @@ void SelectionDAGBuilder::splitSwitchCase(CaseRec &CR, CaseItr Pivot,
   // LHS's Case Value, and that Case Value is exactly one less than the
   // Pivot's Value, then we can branch directly to the LHS's Target,
   // rather than creating a leaf node for it.
-  if ((LHSR.second - LHSR.first) == 1 && LHSR.first->High == CR.GE &&
+  if ((LHSR.second - LHSR.first) == 1 &&
+      LHSR.first->High == CR.GE &&
       cast<ConstantInt>(C)->getValue() ==
-          (cast<ConstantInt>(CR.GE)->getValue() + 1LL)) {
+      (cast<ConstantInt>(CR.GE)->getValue() + 1LL)) {
     TrueBB = LHSR.first->BB;
   } else {
     TrueBB = CurMF->CreateMachineBasicBlock(LLVMBB);
@@ -2507,12 +2475,12 @@ void SelectionDAGBuilder::splitSwitchCase(CaseRec &CR, CaseItr Pivot,
   // the current Case Value, rather than emitting a RHS leaf node for it.
   if ((RHSR.second - RHSR.first) == 1 && CR.LT &&
       cast<ConstantInt>(RHSR.first->Low)->getValue() ==
-          (cast<ConstantInt>(CR.LT)->getValue() - 1LL)) {
+      (cast<ConstantInt>(CR.LT)->getValue() - 1LL)) {
     FalseBB = RHSR.first->BB;
   } else {
     FalseBB = CurMF->CreateMachineBasicBlock(LLVMBB);
     CurMF->insert(BBI, FalseBB);
-    WorkList.push_back(CaseRec(FalseBB, CR.LT, C, RHSR));
+    WorkList.push_back(CaseRec(FalseBB,CR.LT,C,RHSR));
 
     // Put SV in a virtual register to make it available from the new blocks.
     ExportFromCurrentBlock(SV);
@@ -2527,6 +2495,8 @@ void SelectionDAGBuilder::splitSwitchCase(CaseRec &CR, CaseItr Pivot,
     visitSwitchCase(CB, SwitchBB);
   else
     SwitchCases.push_back(CB);
+
+  return true;
 }
 
 /// handleBitTestsSwitchCase - if current case range has few destination and
@@ -4775,7 +4745,6 @@ SelectionDAGBuilder::visitIntrinsicCall(const CallInst &I, unsigned Intrinsic) {
   case Intrinsic::longjmp:
     return &"_longjmp"[!TLI.usesUnderscoreLongJmp()];
   case Intrinsic::memcpy: {
-    // FIXME: this definition of "user defined address space" is x86-specific
     // Assert for address < 256 since we support only user defined address
     // spaces.
     assert(cast<PointerType>(I.getArgOperand(0)->getType())->getAddressSpace()
@@ -4796,7 +4765,6 @@ SelectionDAGBuilder::visitIntrinsicCall(const CallInst &I, unsigned Intrinsic) {
     return nullptr;
   }
   case Intrinsic::memset: {
-    // FIXME: this definition of "user defined address space" is x86-specific
     // Assert for address < 256 since we support only user defined address
     // spaces.
     assert(cast<PointerType>(I.getArgOperand(0)->getType())->getAddressSpace()
@@ -4814,7 +4782,6 @@ SelectionDAGBuilder::visitIntrinsicCall(const CallInst &I, unsigned Intrinsic) {
     return nullptr;
   }
   case Intrinsic::memmove: {
-    // FIXME: this definition of "user defined address space" is x86-specific
     // Assert for address < 256 since we support only user defined address
     // spaces.
     assert(cast<PointerType>(I.getArgOperand(0)->getType())->getAddressSpace()
@@ -5607,8 +5574,7 @@ SelectionDAGBuilder::visitIntrinsicCall(const CallInst &I, unsigned Intrinsic) {
   }
   case Intrinsic::experimental_gc_result_int:
   case Intrinsic::experimental_gc_result_float:
-  case Intrinsic::experimental_gc_result_ptr:
-  case Intrinsic::experimental_gc_result: {
+  case Intrinsic::experimental_gc_result_ptr: {
     visitGCResult(I);
     return nullptr;
   }
@@ -5702,8 +5668,9 @@ SelectionDAGBuilder::lowerInvokable(TargetLowering::CallLoweringInfo &CLI,
 
     CLI.setChain(getRoot());
   }
-  const TargetLowering &TLI = DAG.getTargetLoweringInfo();
-  std::pair<SDValue, SDValue> Result = TLI.LowerCallTo(CLI);
+
+  const TargetLowering *TLI = TM.getSubtargetImpl()->getTargetLowering();
+  std::pair<SDValue, SDValue> Result = TLI->LowerCallTo(CLI);
 
   assert((CLI.IsTailCall || Result.second.getNode()) &&
          "Non-null chain expected with non-tail call!");

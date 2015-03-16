@@ -15,7 +15,6 @@
 #define LLVM_LIB_TARGET_AARCH64_MCTARGETDESC_AARCH64MCASMINFO_H
 
 #include "llvm/MC/MCAsmInfoDarwin.h"
-#include "llvm/MC/MCAsmInfoELF.h"
 
 namespace llvm {
 class Target;
@@ -28,7 +27,7 @@ struct AArch64MCAsmInfoDarwin : public MCAsmInfoDarwin {
                               MCStreamer &Streamer) const override;
 };
 
-struct AArch64MCAsmInfoELF : public MCAsmInfoELF {
+struct AArch64MCAsmInfoELF : public MCAsmInfo {
   explicit AArch64MCAsmInfoELF(StringRef TT);
 };
 

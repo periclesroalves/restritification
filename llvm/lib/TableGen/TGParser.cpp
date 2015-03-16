@@ -1676,7 +1676,7 @@ std::vector<Init*> TGParser::ParseValueList(Record *CurRec, Record *ArgsRec,
   unsigned int ArgN = 0;
   if (ArgsRec && !EltTy) {
     const std::vector<Init *> &TArgs = ArgsRec->getTemplateArgs();
-    if (TArgs.empty()) {
+    if (!TArgs.size()) {
       TokError("template argument provided to non-template class");
       return std::vector<Init*>();
     }

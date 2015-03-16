@@ -44,9 +44,10 @@ ARMHazardRecognizer::getHazardType(SUnit *SU, int Stalls) {
     if (LastMI && (MCID.TSFlags & ARMII::DomainMask) != ARMII::DomainGeneral) {
       MachineInstr *DefMI = LastMI;
       const MCInstrDesc &LastMCID = LastMI->getDesc();
-      const MachineFunction *MF = MI->getParent()->getParent();
+      const TargetMachine &TM =
+        MI->getParent()->getParent()->getTarget();
       const ARMBaseInstrInfo &TII = *static_cast<const ARMBaseInstrInfo *>(
-                                        MF->getSubtarget().getInstrInfo());
+                                        TM.getSubtargetImpl()->getInstrInfo());
 
       // Skip over one non-VFP / NEON instruction.
       if (!LastMI->isBarrier() &&

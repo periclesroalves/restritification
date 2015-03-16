@@ -19,7 +19,6 @@
 #include "MipsAsmPrinter.h"
 #include "MipsInstrInfo.h"
 #include "MipsMCInstLower.h"
-#include "MipsTargetMachine.h"
 #include "MipsTargetStreamer.h"
 #include "llvm/ADT/SmallString.h"
 #include "llvm/ADT/StringExtras.h"
@@ -320,7 +319,7 @@ void MipsAsmPrinter::emitFrameDirective() {
 
 /// Emit Set directives.
 const char *MipsAsmPrinter::getCurrentABIString() const {
-  switch (static_cast<MipsTargetMachine &>(TM).getABI().GetEnumValue()) {
+  switch (Subtarget->getABI().GetEnumValue()) {
   case MipsABIInfo::ABI::O32:  return "abi32";
   case MipsABIInfo::ABI::N32:  return "abiN32";
   case MipsABIInfo::ABI::N64:  return "abi64";
@@ -561,7 +560,7 @@ bool MipsAsmPrinter::PrintAsmMemoryOperand(const MachineInstr *MI,
 
 void MipsAsmPrinter::printOperand(const MachineInstr *MI, int opNum,
                                   raw_ostream &O) {
-  const DataLayout *DL = TM.getDataLayout();
+  const DataLayout *DL = TM.getSubtargetImpl()->getDataLayout();
   const MachineOperand &MO = MI->getOperand(opNum);
   bool closeP = false;
 
@@ -691,7 +690,6 @@ printRegisterList(const MachineInstr *MI, int opNum, raw_ostream &O) {
 
 void MipsAsmPrinter::EmitStartOfAsmFile(Module &M) {
   bool IsABICalls = Subtarget->isABICalls();
-  const MipsABIInfo &ABI = static_cast<const MipsTargetMachine &>(TM).getABI();
   if (IsABICalls) {
     getTargetStreamer().emitDirectiveAbiCalls();
     Reloc::Model RM = TM.getRelocationModel();
@@ -699,14 +697,14 @@ void MipsAsmPrinter::EmitStartOfAsmFile(Module &M) {
     //        Ideally it should test for properties of the ABI and not the ABI
     //        itself.
     //        For the moment, I'm only correcting enough to make MIPS-IV work.
-    if (RM == Reloc::Static && !ABI.IsN64())
+    if (RM == Reloc::Static && !Subtarget->isABI_N64())
       getTargetStreamer().emitDirectiveOptionPic0();
   }
 
   // Tell the assembler which ABI we are using
   std::string SectionName = std::string(".mdebug.") + getCurrentABIString();
-  OutStreamer.SwitchSection(
-      OutContext.getELFSection(SectionName, ELF::SHT_PROGBITS, 0));
+  OutStreamer.SwitchSection(OutContext.getELFSection(
+      SectionName, ELF::SHT_PROGBITS, 0, SectionKind::getDataRel()));
 
   // NaN: At the moment we only support:
   // 1. .nan legacy (default)
@@ -716,13 +714,15 @@ void MipsAsmPrinter::EmitStartOfAsmFile(Module &M) {
 
   // TODO: handle O64 ABI
 
-  if (ABI.IsEABI()) {
+  if (Subtarget->isABI_EABI()) {
     if (Subtarget->isGP32bit())
-      OutStreamer.SwitchSection(OutContext.getELFSection(".gcc_compiled_long32",
-                                                         ELF::SHT_PROGBITS, 0));
+      OutStreamer.SwitchSection(
+          OutContext.getELFSection(".gcc_compiled_long32", ELF::SHT_PROGBITS, 0,
+                                   SectionKind::getDataRel()));
     else
-      OutStreamer.SwitchSection(OutContext.getELFSection(".gcc_compiled_long64",
-                                                         ELF::SHT_PROGBITS, 0));
+      OutStreamer.SwitchSection(
+          OutContext.getELFSection(".gcc_compiled_long64", ELF::SHT_PROGBITS, 0,
+                                   SectionKind::getDataRel()));
   }
 
   getTargetStreamer().updateABIInfo(*Subtarget);
@@ -730,15 +730,17 @@ void MipsAsmPrinter::EmitStartOfAsmFile(Module &M) {
   // We should always emit a '.module fp=...' but binutils 2.24 does not accept
   // it. We therefore emit it when it contradicts the ABI defaults (-mfpxx or
   // -mfp64) and omit it otherwise.
-  if (ABI.IsO32() && (Subtarget->isABI_FPXX() || Subtarget->isFP64bit()))
+  if (Subtarget->isABI_O32() && (Subtarget->isABI_FPXX() ||
+                                 Subtarget->isFP64bit()))
     getTargetStreamer().emitDirectiveModuleFP();
 
   // We should always emit a '.module [no]oddspreg' but binutils 2.24 does not
   // accept it. We therefore emit it when it contradicts the default or an
   // option has changed the default (i.e. FPXX) and omit it otherwise.
-  if (ABI.IsO32() && (!Subtarget->useOddSPReg() || Subtarget->isABI_FPXX()))
+  if (Subtarget->isABI_O32() && (!Subtarget->useOddSPReg() ||
+                                 Subtarget->isABI_FPXX()))
     getTargetStreamer().emitDirectiveModuleOddSPReg(Subtarget->useOddSPReg(),
-                                                    ABI.IsO32());
+                                                    Subtarget->isABI_O32());
 }
 
 void MipsAsmPrinter::emitInlineAsmStart(
@@ -942,7 +944,7 @@ void MipsAsmPrinter::EmitFPCallStub(
   //
   const MCSectionELF *M = OutContext.getELFSection(
       ".mips16.call.fp." + std::string(Symbol), ELF::SHT_PROGBITS,
-      ELF::SHF_ALLOC | ELF::SHF_EXECINSTR);
+      ELF::SHF_ALLOC | ELF::SHF_EXECINSTR, SectionKind::getText());
   OutStreamer.SwitchSection(M, nullptr);
   //
   // .align 2

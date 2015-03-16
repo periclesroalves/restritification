@@ -31,6 +31,7 @@ class DbgDeclareInst;
 class StoreInst;
 class LoadInst;
 class Value;
+class Pass;
 class PHINode;
 class AllocaInst;
 class AssumptionCache;
@@ -114,7 +115,7 @@ void RemovePredecessorAndSimplify(BasicBlock *BB, BasicBlock *Pred,
 /// between them, moving the instructions in the predecessor into BB.  This
 /// deletes the predecessor block.
 ///
-void MergeBasicBlockIntoOnlyPred(BasicBlock *BB, DominatorTree *DT = nullptr);
+void MergeBasicBlockIntoOnlyPred(BasicBlock *BB, Pass *P = nullptr);
 
 /// TryToSimplifyUncondBranchFromEmptyBlock - BB is known to contain an
 /// unconditional branch, and contains no instructions other than PHI nodes,
@@ -274,11 +275,10 @@ bool LowerDbgDeclare(Function &F);
 /// an alloca, if any.
 DbgDeclareInst *FindAllocaDbgDeclare(Value *V);
 
-/// \brief Replaces llvm.dbg.declare instruction when an alloca is replaced with
-/// a new value.  If Deref is true, tan additional DW_OP_deref is prepended to
-/// the expression.
+/// replaceDbgDeclareForAlloca - Replaces llvm.dbg.declare instruction when
+/// alloca is replaced with a new value.
 bool replaceDbgDeclareForAlloca(AllocaInst *AI, Value *NewAllocaAddress,
-                                DIBuilder &Builder, bool Deref);
+                                DIBuilder &Builder);
 
 /// \brief Remove all blocks that can not be reached from the function's entry.
 ///

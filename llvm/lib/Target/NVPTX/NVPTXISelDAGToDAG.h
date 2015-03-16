@@ -43,8 +43,8 @@ public:
   const char *getPassName() const override {
     return "NVPTX DAG->DAG Pattern Instruction Selection";
   }
-  bool runOnMachineFunction(MachineFunction &MF) override;
-  const NVPTXSubtarget *Subtarget;
+
+  const NVPTXSubtarget &Subtarget;
 
   bool SelectInlineAsmMemoryOperand(const SDValue &Op,
                                     char ConstraintCode,

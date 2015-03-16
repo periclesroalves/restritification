@@ -271,11 +271,11 @@ namespace llvm {
     }
 
     const MCSectionELF *getELFSection(StringRef Section, unsigned Type,
-                                      unsigned Flags);
+                                      unsigned Flags, SectionKind Kind);
 
     const MCSectionELF *getELFSection(StringRef Section, unsigned Type,
-                                      unsigned Flags, unsigned EntrySize,
-                                      StringRef Group);
+                                      unsigned Flags, SectionKind Kind,
+                                      unsigned EntrySize, StringRef Group);
 
     void renameELFSection(const MCSectionELF *Section, StringRef Name);
 

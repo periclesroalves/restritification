@@ -23,7 +23,7 @@ class AssumptionCacheTracker;
 class CallSite;
 class DataLayout;
 class Function;
-class TargetTransformInfoWrapperPass;
+class TargetTransformInfo;
 
 namespace InlineConstants {
   // Various magic constants used to adjust heuristics.
@@ -100,7 +100,7 @@ public:
 
 /// \brief Cost analyzer used by inliner.
 class InlineCostAnalysis : public CallGraphSCCPass {
-  TargetTransformInfoWrapperPass *TTIWP;
+  const TargetTransformInfo *TTI;
   AssumptionCacheTracker *ACT;
 
 public:

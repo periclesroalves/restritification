@@ -50,13 +50,9 @@ FunctionPass *llvm::createNVPTXISelDag(NVPTXTargetMachine &TM,
 
 NVPTXDAGToDAGISel::NVPTXDAGToDAGISel(NVPTXTargetMachine &tm,
                                      CodeGenOpt::Level OptLevel)
-    : SelectionDAGISel(tm, OptLevel) {
+    : SelectionDAGISel(tm, OptLevel),
+      Subtarget(tm.getSubtarget<NVPTXSubtarget>()) {
   doMulWide = (OptLevel > 0);
-}
-
-bool NVPTXDAGToDAGISel::runOnMachineFunction(MachineFunction &MF) {
-    Subtarget = &static_cast<const NVPTXSubtarget &>(MF.getSubtarget());
-    return SelectionDAGISel::runOnMachineFunction(MF);
 }
 
 int NVPTXDAGToDAGISel::getDivF32Level() const {
@@ -102,7 +98,7 @@ bool NVPTXDAGToDAGISel::useF32FTZ() const {
 }
 
 bool NVPTXDAGToDAGISel::allowFMA() const {
-  const NVPTXTargetLowering *TL = Subtarget->getTargetLowering();
+  const NVPTXTargetLowering *TL = Subtarget.getTargetLowering();
   return TL->allowFMA(*MF, OptLevel);
 }
 
@@ -529,7 +525,8 @@ SDNode *NVPTXDAGToDAGISel::SelectIntrinsicChain(SDNode *N) {
   }
 }
 
-static unsigned int getCodeAddrSpace(MemSDNode *N) {
+static unsigned int getCodeAddrSpace(MemSDNode *N,
+                                     const NVPTXSubtarget &Subtarget) {
   const Value *Src = N->getMemOperand()->getValue();
 
   if (!Src)
@@ -582,19 +579,19 @@ SDNode *NVPTXDAGToDAGISel::SelectAddrSpaceCast(SDNode *N) {
     switch (SrcAddrSpace) {
     default: report_fatal_error("Bad address space in addrspacecast");
     case ADDRESS_SPACE_GLOBAL:
-      Opc = Subtarget->is64Bit() ? NVPTX::cvta_global_yes_64
+      Opc = Subtarget.is64Bit() ? NVPTX::cvta_global_yes_64
                                 : NVPTX::cvta_global_yes;
       break;
     case ADDRESS_SPACE_SHARED:
-      Opc = Subtarget->is64Bit() ? NVPTX::cvta_shared_yes_64
+      Opc = Subtarget.is64Bit() ? NVPTX::cvta_shared_yes_64
                                 : NVPTX::cvta_shared_yes;
       break;
     case ADDRESS_SPACE_CONST:
-      Opc = Subtarget->is64Bit() ? NVPTX::cvta_const_yes_64
+      Opc = Subtarget.is64Bit() ? NVPTX::cvta_const_yes_64
                                 : NVPTX::cvta_const_yes;
       break;
     case ADDRESS_SPACE_LOCAL:
-      Opc = Subtarget->is64Bit() ? NVPTX::cvta_local_yes_64
+      Opc = Subtarget.is64Bit() ? NVPTX::cvta_local_yes_64
                                 : NVPTX::cvta_local_yes;
       break;
     }
@@ -607,19 +604,19 @@ SDNode *NVPTXDAGToDAGISel::SelectAddrSpaceCast(SDNode *N) {
     switch (DstAddrSpace) {
     default: report_fatal_error("Bad address space in addrspacecast");
     case ADDRESS_SPACE_GLOBAL:
-      Opc = Subtarget->is64Bit() ? NVPTX::cvta_to_global_yes_64
+      Opc = Subtarget.is64Bit() ? NVPTX::cvta_to_global_yes_64
                                 : NVPTX::cvta_to_global_yes;
       break;
     case ADDRESS_SPACE_SHARED:
-      Opc = Subtarget->is64Bit() ? NVPTX::cvta_to_shared_yes_64
+      Opc = Subtarget.is64Bit() ? NVPTX::cvta_to_shared_yes_64
                                 : NVPTX::cvta_to_shared_yes;
       break;
     case ADDRESS_SPACE_CONST:
-      Opc = Subtarget->is64Bit() ? NVPTX::cvta_to_const_yes_64
+      Opc = Subtarget.is64Bit() ? NVPTX::cvta_to_const_yes_64
                                 : NVPTX::cvta_to_const_yes;
       break;
     case ADDRESS_SPACE_LOCAL:
-      Opc = Subtarget->is64Bit() ? NVPTX::cvta_to_local_yes_64
+      Opc = Subtarget.is64Bit() ? NVPTX::cvta_to_local_yes_64
                                 : NVPTX::cvta_to_local_yes;
       break;
     }
@@ -641,7 +638,7 @@ SDNode *NVPTXDAGToDAGISel::SelectLoad(SDNode *N) {
     return nullptr;
 
   // Address Space Setting
-  unsigned int codeAddrSpace = getCodeAddrSpace(LD);
+  unsigned int codeAddrSpace = getCodeAddrSpace(LD, Subtarget);
 
   // Volatile Setting
   // - .volatile is only availalble for .global and .shared
@@ -716,7 +713,7 @@ SDNode *NVPTXDAGToDAGISel::SelectLoad(SDNode *N) {
                       getI32Imm(vecType), getI32Imm(fromType),
                       getI32Imm(fromTypeWidth), Addr, Chain };
     NVPTXLD = CurDAG->getMachineNode(Opcode, dl, TargetVT, MVT::Other, Ops);
-  } else if (Subtarget->is64Bit()
+  } else if (Subtarget.is64Bit()
                  ? SelectADDRsi64(N1.getNode(), N1, Base, Offset)
                  : SelectADDRsi(N1.getNode(), N1, Base, Offset)) {
     switch (TargetVT) {
@@ -745,10 +742,10 @@ SDNode *NVPTXDAGToDAGISel::SelectLoad(SDNode *N) {
                       getI32Imm(vecType), getI32Imm(fromType),
                       getI32Imm(fromTypeWidth), Base, Offset, Chain };
     NVPTXLD = CurDAG->getMachineNode(Opcode, dl, TargetVT, MVT::Other, Ops);
-  } else if (Subtarget->is64Bit()
+  } else if (Subtarget.is64Bit()
                  ? SelectADDRri64(N1.getNode(), N1, Base, Offset)
                  : SelectADDRri(N1.getNode(), N1, Base, Offset)) {
-    if (Subtarget->is64Bit()) {
+    if (Subtarget.is64Bit()) {
       switch (TargetVT) {
       case MVT::i8:
         Opcode = NVPTX::LD_i8_ari_64;
@@ -800,7 +797,7 @@ SDNode *NVPTXDAGToDAGISel::SelectLoad(SDNode *N) {
                       getI32Imm(fromTypeWidth), Base, Offset, Chain };
     NVPTXLD = CurDAG->getMachineNode(Opcode, dl, TargetVT, MVT::Other, Ops);
   } else {
-    if (Subtarget->is64Bit()) {
+    if (Subtarget.is64Bit()) {
       switch (TargetVT) {
       case MVT::i8:
         Opcode = NVPTX::LD_i8_areg_64;
@@ -877,7 +874,7 @@ SDNode *NVPTXDAGToDAGISel::SelectLoadVector(SDNode *N) {
     return nullptr;
 
   // Address Space Setting
-  unsigned int CodeAddrSpace = getCodeAddrSpace(MemSD);
+  unsigned int CodeAddrSpace = getCodeAddrSpace(MemSD, Subtarget);
 
   // Volatile Setting
   // - .volatile is only availalble for .global and .shared
@@ -977,7 +974,7 @@ SDNode *NVPTXDAGToDAGISel::SelectLoadVector(SDNode *N) {
                       getI32Imm(VecType), getI32Imm(FromType),
                       getI32Imm(FromTypeWidth), Addr, Chain };
     LD = CurDAG->getMachineNode(Opcode, DL, N->getVTList(), Ops);
-  } else if (Subtarget->is64Bit()
+  } else if (Subtarget.is64Bit()
                  ? SelectADDRsi64(Op1.getNode(), Op1, Base, Offset)
                  : SelectADDRsi(Op1.getNode(), Op1, Base, Offset)) {
     switch (N->getOpcode()) {
@@ -1031,10 +1028,10 @@ SDNode *NVPTXDAGToDAGISel::SelectLoadVector(SDNode *N) {
                       getI32Imm(VecType), getI32Imm(FromType),
                       getI32Imm(FromTypeWidth), Base, Offset, Chain };
     LD = CurDAG->getMachineNode(Opcode, DL, N->getVTList(), Ops);
-  } else if (Subtarget->is64Bit()
+  } else if (Subtarget.is64Bit()
                  ? SelectADDRri64(Op1.getNode(), Op1, Base, Offset)
                  : SelectADDRri(Op1.getNode(), Op1, Base, Offset)) {
-    if (Subtarget->is64Bit()) {
+    if (Subtarget.is64Bit()) {
       switch (N->getOpcode()) {
       default:
         return nullptr;
@@ -1136,7 +1133,7 @@ SDNode *NVPTXDAGToDAGISel::SelectLoadVector(SDNode *N) {
 
     LD = CurDAG->getMachineNode(Opcode, DL, N->getVTList(), Ops);
   } else {
-    if (Subtarget->is64Bit()) {
+    if (Subtarget.is64Bit()) {
       switch (N->getOpcode()) {
       default:
         return nullptr;
@@ -1428,10 +1425,10 @@ SDNode *NVPTXDAGToDAGISel::SelectLDGLDU(SDNode *N) {
 
     SDValue Ops[] = { Addr, Chain };
     LD = CurDAG->getMachineNode(Opcode, DL, N->getVTList(), Ops);
-  } else if (Subtarget->is64Bit()
+  } else if (Subtarget.is64Bit()
                  ? SelectADDRri64(Op1.getNode(), Op1, Base, Offset)
                  : SelectADDRri(Op1.getNode(), Op1, Base, Offset)) {
-    if (Subtarget->is64Bit()) {
+    if (Subtarget.is64Bit()) {
       switch (N->getOpcode()) {
       default:
         return nullptr;
@@ -1713,7 +1710,7 @@ SDNode *NVPTXDAGToDAGISel::SelectLDGLDU(SDNode *N) {
 
     LD = CurDAG->getMachineNode(Opcode, DL, N->getVTList(), Ops);
   } else {
-    if (Subtarget->is64Bit()) {
+    if (Subtarget.is64Bit()) {
       switch (N->getOpcode()) {
       default:
         return nullptr;
@@ -2016,7 +2013,7 @@ SDNode *NVPTXDAGToDAGISel::SelectStore(SDNode *N) {
     return nullptr;
 
   // Address Space Setting
-  unsigned int codeAddrSpace = getCodeAddrSpace(ST);
+  unsigned int codeAddrSpace = getCodeAddrSpace(ST, Subtarget);
 
   // Volatile Setting
   // - .volatile is only availalble for .global and .shared
@@ -2086,7 +2083,7 @@ SDNode *NVPTXDAGToDAGISel::SelectStore(SDNode *N) {
                       getI32Imm(vecType), getI32Imm(toType),
                       getI32Imm(toTypeWidth), Addr, Chain };
     NVPTXST = CurDAG->getMachineNode(Opcode, dl, MVT::Other, Ops);
-  } else if (Subtarget->is64Bit()
+  } else if (Subtarget.is64Bit()
                  ? SelectADDRsi64(N2.getNode(), N2, Base, Offset)
                  : SelectADDRsi(N2.getNode(), N2, Base, Offset)) {
     switch (SourceVT) {
@@ -2115,10 +2112,10 @@ SDNode *NVPTXDAGToDAGISel::SelectStore(SDNode *N) {
                       getI32Imm(vecType), getI32Imm(toType),
                       getI32Imm(toTypeWidth), Base, Offset, Chain };
     NVPTXST = CurDAG->getMachineNode(Opcode, dl, MVT::Other, Ops);
-  } else if (Subtarget->is64Bit()
+  } else if (Subtarget.is64Bit()
                  ? SelectADDRri64(N2.getNode(), N2, Base, Offset)
                  : SelectADDRri(N2.getNode(), N2, Base, Offset)) {
-    if (Subtarget->is64Bit()) {
+    if (Subtarget.is64Bit()) {
       switch (SourceVT) {
       case MVT::i8:
         Opcode = NVPTX::ST_i8_ari_64;
@@ -2170,7 +2167,7 @@ SDNode *NVPTXDAGToDAGISel::SelectStore(SDNode *N) {
                       getI32Imm(toTypeWidth), Base, Offset, Chain };
     NVPTXST = CurDAG->getMachineNode(Opcode, dl, MVT::Other, Ops);
   } else {
-    if (Subtarget->is64Bit()) {
+    if (Subtarget.is64Bit()) {
       switch (SourceVT) {
       case MVT::i8:
         Opcode = NVPTX::ST_i8_areg_64;
@@ -2244,7 +2241,7 @@ SDNode *NVPTXDAGToDAGISel::SelectStoreVector(SDNode *N) {
   EVT StoreVT = MemSD->getMemoryVT();
 
   // Address Space Setting
-  unsigned CodeAddrSpace = getCodeAddrSpace(MemSD);
+  unsigned CodeAddrSpace = getCodeAddrSpace(MemSD, Subtarget);
 
   if (CodeAddrSpace == NVPTX::PTXLdStInstCode::CONSTANT) {
     report_fatal_error("Cannot store to pointer that points to constant "
@@ -2347,7 +2344,7 @@ SDNode *NVPTXDAGToDAGISel::SelectStoreVector(SDNode *N) {
       break;
     }
     StOps.push_back(Addr);
-  } else if (Subtarget->is64Bit()
+  } else if (Subtarget.is64Bit()
                  ? SelectADDRsi64(N2.getNode(), N2, Base, Offset)
                  : SelectADDRsi(N2.getNode(), N2, Base, Offset)) {
     switch (N->getOpcode()) {
@@ -2398,10 +2395,10 @@ SDNode *NVPTXDAGToDAGISel::SelectStoreVector(SDNode *N) {
     }
     StOps.push_back(Base);
     StOps.push_back(Offset);
-  } else if (Subtarget->is64Bit()
+  } else if (Subtarget.is64Bit()
                  ? SelectADDRri64(N2.getNode(), N2, Base, Offset)
                  : SelectADDRri(N2.getNode(), N2, Base, Offset)) {
-    if (Subtarget->is64Bit()) {
+    if (Subtarget.is64Bit()) {
       switch (N->getOpcode()) {
       default:
         return nullptr;
@@ -2499,7 +2496,7 @@ SDNode *NVPTXDAGToDAGISel::SelectStoreVector(SDNode *N) {
     StOps.push_back(Base);
     StOps.push_back(Offset);
   } else {
-    if (Subtarget->is64Bit()) {
+    if (Subtarget.is64Bit()) {
       switch (N->getOpcode()) {
       default:
         return nullptr;

@@ -25,24 +25,15 @@ using namespace llvm::dwarf;
 
 namespace {
 class HeaderBuilder {
-  /// \brief Whether there are any fields yet.
-  ///
-  /// Note that this is not equivalent to \c Chars.empty(), since \a concat()
-  /// may have been called already with an empty string.
-  bool IsEmpty;
   SmallVector<char, 256> Chars;
 
 public:
-  HeaderBuilder() : IsEmpty(true) {}
-  HeaderBuilder(const HeaderBuilder &X) : IsEmpty(X.IsEmpty), Chars(X.Chars) {}
-  HeaderBuilder(HeaderBuilder &&X)
-      : IsEmpty(X.IsEmpty), Chars(std::move(X.Chars)) {}
+  explicit HeaderBuilder(Twine T) { T.toVector(Chars); }
+  HeaderBuilder(const HeaderBuilder &X) : Chars(X.Chars) {}
+  HeaderBuilder(HeaderBuilder &&X) : Chars(std::move(X.Chars)) {}
 
   template <class Twineable> HeaderBuilder &concat(Twineable &&X) {
-    if (IsEmpty)
-      IsEmpty = false;
-    else
-      Chars.push_back(0);
+    Chars.push_back(0);
     Twine(X).toVector(Chars);
     return *this;
   }
@@ -52,7 +43,7 @@ public:
   }
 
   static HeaderBuilder get(unsigned Tag) {
-    return HeaderBuilder().concat("0x" + Twine::utohexstr(Tag));
+    return HeaderBuilder("0x" + Twine::utohexstr(Tag));
   }
 };
 }
@@ -63,14 +54,19 @@ DIBuilder::DIBuilder(Module &m, bool AllowUnresolvedNodes)
       DeclareFn(nullptr), ValueFn(nullptr),
       AllowUnresolvedNodes(AllowUnresolvedNodes) {}
 
-void DIBuilder::trackIfUnresolved(MDNode *N) {
-  if (!N)
-    return;
-  if (N->isResolved())
-    return;
+static bool isUnresolved(MDNode *N) {
+  return N &&
+         (isa<MDNodeFwdDecl>(N) || !cast<UniquableMDNode>(N)->isResolved());
+}
 
-  assert(AllowUnresolvedNodes && "Cannot handle unresolved nodes");
-  UnresolvedNodes.emplace_back(N);
+void DIBuilder::trackIfUnresolved(MDNode *N) {
+  if (!AllowUnresolvedNodes) {
+    assert(!isUnresolved(N) && "Cannot handle unresolved nodes");
+    return;
+  }
+  if (isUnresolved(N))
+    UnresolvedNodes.emplace_back(N);
+  return;
 }
 
 void DIBuilder::finalize() {
@@ -114,8 +110,8 @@ void DIBuilder::finalize() {
   // Now that all temp nodes have been replaced or deleted, resolve remaining
   // cycles.
   for (const auto &N : UnresolvedNodes)
-    if (N && !N->isResolved())
-      N->resolveCycles();
+    if (N)
+      cast<UniquableMDNode>(N)->resolveCycles();
   UnresolvedNodes.clear();
 
   // Can't handle unresolved nodes anymore.
@@ -151,15 +147,15 @@ DICompileUnit DIBuilder::createCompileUnit(unsigned Lang, StringRef Filename,
   assert(!Filename.empty() &&
          "Unable to create compile unit without filename");
   Metadata *TElts[] = {HeaderBuilder::get(DW_TAG_base_type).get(VMContext)};
-  TempEnumTypes = MDNode::getTemporary(VMContext, TElts).release();
+  TempEnumTypes = MDNode::getTemporary(VMContext, TElts);
 
-  TempRetainTypes = MDNode::getTemporary(VMContext, TElts).release();
+  TempRetainTypes = MDNode::getTemporary(VMContext, TElts);
 
-  TempSubprograms = MDNode::getTemporary(VMContext, TElts).release();
+  TempSubprograms = MDNode::getTemporary(VMContext, TElts);
 
-  TempGVs = MDNode::getTemporary(VMContext, TElts).release();
+  TempGVs = MDNode::getTemporary(VMContext, TElts);
 
-  TempImportedModules = MDNode::getTemporary(VMContext, TElts).release();
+  TempImportedModules = MDNode::getTemporary(VMContext, TElts);
 
   Metadata *Elts[] = {HeaderBuilder::get(dwarf::DW_TAG_compile_unit)
                           .concat(Lang)
@@ -748,10 +744,8 @@ static HeaderBuilder setTypeFlagsInHeader(StringRef Header,
     Flags = 0;
   Flags |= FlagsToSet;
 
-  return HeaderBuilder()
-      .concat(I.getPrefix())
-      .concat(Flags)
-      .concat(I.getSuffix());
+  return HeaderBuilder(Twine(I.getPrefix())).concat(Flags).concat(
+      I.getSuffix());
 }
 
 static DIType createTypeWithFlags(LLVMContext &Context, DIType Ty,
@@ -836,7 +830,7 @@ DICompositeType DIBuilder::createReplaceableForwardDecl(
       nullptr, // TemplateParams
       UniqueIdentifier.empty() ? nullptr
                                : MDString::get(VMContext, UniqueIdentifier)};
-  DICompositeType RetTy(MDNode::getTemporary(VMContext, Elts).release());
+  DICompositeType RetTy(MDNode::getTemporary(VMContext, Elts));
   assert(RetTy.isCompositeType() &&
          "createReplaceableForwardDecl result should be a DIType");
   if (!UniqueIdentifier.empty())
@@ -914,7 +908,7 @@ DIGlobalVariable DIBuilder::createTempGlobalVariableFwdDecl(
   return createGlobalVariableHelper(VMContext, Context, Name, LinkageName, F,
                                     LineNumber, Ty, isLocalToUnit, Val, Decl,
                                     false, [&](ArrayRef<Metadata *> Elts) {
-    return MDNode::getTemporary(VMContext, Elts).release();
+    return MDNode::getTemporary(VMContext, Elts);
   });
 }
 
@@ -1018,7 +1012,7 @@ DISubprogram DIBuilder::createFunction(DIDescriptor Context, StringRef Name,
   return createFunctionHelper(VMContext, Context, Name, LinkageName, File,
                               LineNo, Ty, isLocalToUnit, isDefinition,
                               ScopeLine, Flags, isOptimized, Fn, TParams, Decl,
-                              MDNode::getTemporary(VMContext, None).release(),
+                              MDNode::getTemporary(VMContext, None),
                               [&](ArrayRef<Metadata *> Elts) -> MDNode *{
     MDNode *Node = MDNode::get(VMContext, Elts);
     // Create a named metadata so that we
@@ -1041,7 +1035,7 @@ DIBuilder::createTempFunctionFwdDecl(DIDescriptor Context, StringRef Name,
                               LineNo, Ty, isLocalToUnit, isDefinition,
                               ScopeLine, Flags, isOptimized, Fn, TParams, Decl,
                               nullptr, [&](ArrayRef<Metadata *> Elts) {
-    return MDNode::getTemporary(VMContext, Elts).release();
+    return MDNode::getTemporary(VMContext, Elts);
   });
 }
 

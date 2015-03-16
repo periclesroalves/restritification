@@ -15,7 +15,6 @@
 #ifndef LLVM_LIB_TARGET_MIPS_MIPSISELLOWERING_H
 #define LLVM_LIB_TARGET_MIPS_MIPSISELLOWERING_H
 
-#include "MCTargetDesc/MipsABIInfo.h"
 #include "MCTargetDesc/MipsBaseInfo.h"
 #include "Mips.h"
 #include "llvm/CodeGen/CallingConvLower.h"
@@ -362,8 +361,6 @@ namespace llvm {
 
     // Subtarget Info
     const MipsSubtarget &Subtarget;
-    // Cache the ABI from the TargetMachine, we use it everywhere.
-    const MipsABIInfo &ABI;
 
   private:
     // Create a TargetGlobalAddress node.

@@ -172,6 +172,8 @@ public:
 class Interference : public PBQPRAConstraint {
 private:
 
+private:
+
   typedef const PBQP::RegAlloc::AllowedRegVector* AllowedRegVecPtr;
   typedef std::pair<AllowedRegVecPtr, AllowedRegVecPtr> IMatrixKey;
   typedef DenseMap<IMatrixKey, PBQPRAGraph::MatrixPtr> IMatrixCache;
@@ -306,7 +308,7 @@ private:
                               PBQPRAGraph::NodeId MId, IMatrixCache &C) {
 
     const TargetRegisterInfo &TRI =
-        *G.getMetadata().MF.getSubtarget().getRegisterInfo();
+      *G.getMetadata().MF.getTarget().getSubtargetImpl()->getRegisterInfo();
 
     const auto &NRegs = G.getNodeMetadata(NId).getAllowedRegs();
     const auto &MRegs = G.getNodeMetadata(MId).getAllowedRegs();
@@ -340,7 +342,7 @@ public:
   void apply(PBQPRAGraph &G) override {
     MachineFunction &MF = G.getMetadata().MF;
     MachineBlockFrequencyInfo &MBFI = G.getMetadata().MBFI;
-    CoalescerPair CP(*MF.getSubtarget().getRegisterInfo());
+    CoalescerPair CP(*MF.getTarget().getSubtargetImpl()->getRegisterInfo());
 
     // Scan the machine function and add a coalescing cost whenever CoalescerPair
     // gives the Ok.
@@ -492,7 +494,7 @@ void RegAllocPBQP::initializeGraph(PBQPRAGraph &G) {
   LiveIntervals &LIS = G.getMetadata().LIS;
   const MachineRegisterInfo &MRI = G.getMetadata().MF.getRegInfo();
   const TargetRegisterInfo &TRI =
-      *G.getMetadata().MF.getSubtarget().getRegisterInfo();
+    *G.getMetadata().MF.getTarget().getSubtargetImpl()->getRegisterInfo();
 
   for (auto VReg : VRegsToAlloc) {
     const TargetRegisterClass *TRC = MRI.getRegClass(VReg);
@@ -551,7 +553,8 @@ bool RegAllocPBQP::mapPBQPToRegAlloc(const PBQPRAGraph &G,
                                      Spiller &VRegSpiller) {
   MachineFunction &MF = G.getMetadata().MF;
   LiveIntervals &LIS = G.getMetadata().LIS;
-  const TargetRegisterInfo &TRI = *MF.getSubtarget().getRegisterInfo();
+  const TargetRegisterInfo &TRI =
+    *MF.getTarget().getSubtargetImpl()->getRegisterInfo();
   (void)TRI;
 
   // Set to true if we have any spills
@@ -667,7 +670,7 @@ bool RegAllocPBQP::runOnMachineFunction(MachineFunction &MF) {
   // If there are non-empty intervals allocate them using pbqp.
   if (!VRegsToAlloc.empty()) {
 
-    const TargetSubtargetInfo &Subtarget = MF.getSubtarget();
+    const TargetSubtargetInfo &Subtarget = *MF.getTarget().getSubtargetImpl();
     std::unique_ptr<PBQPRAConstraintList> ConstraintsRoot =
       llvm::make_unique<PBQPRAConstraintList>();
     ConstraintsRoot->addConstraint(llvm::make_unique<SpillCosts>());

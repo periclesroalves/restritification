@@ -25,8 +25,10 @@ namespace llvm {
     const HexagonSubtarget *Subtarget;
 
   public:
-    explicit HexagonAsmPrinter(TargetMachine &TM,
-                               std::unique_ptr<MCStreamer> Streamer);
+    explicit HexagonAsmPrinter(TargetMachine &TM, MCStreamer &Streamer)
+      : AsmPrinter(TM, Streamer) {
+      Subtarget = &TM.getSubtarget<HexagonSubtarget>();
+    }
 
     const char *getPassName() const override {
       return "Hexagon Assembly Printer";

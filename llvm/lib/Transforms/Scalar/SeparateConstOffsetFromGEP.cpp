@@ -313,8 +313,7 @@ class SeparateConstOffsetFromGEP : public FunctionPass {
 
   void getAnalysisUsage(AnalysisUsage &AU) const override {
     AU.addRequired<DataLayoutPass>();
-    AU.addRequired<TargetTransformInfoWrapperPass>();
-    AU.setPreservesCFG();
+    AU.addRequired<TargetTransformInfo>();
   }
 
   bool doInitialization(Module &M) override {
@@ -385,7 +384,7 @@ INITIALIZE_PASS_BEGIN(
     SeparateConstOffsetFromGEP, "separate-const-offset-from-gep",
     "Split GEPs to a variadic base and a constant offset for better CSE", false,
     false)
-INITIALIZE_PASS_DEPENDENCY(TargetTransformInfoWrapperPass)
+INITIALIZE_AG_DEPENDENCY(TargetTransformInfo)
 INITIALIZE_PASS_DEPENDENCY(DataLayoutPass)
 INITIALIZE_PASS_END(
     SeparateConstOffsetFromGEP, "separate-const-offset-from-gep",
@@ -858,9 +857,7 @@ bool SeparateConstOffsetFromGEP::splitGEP(GetElementPtrInst *GEP) {
   // of variable indices. Therefore, we don't check for addressing modes in that
   // case.
   if (!LowerGEP) {
-    TargetTransformInfo &TTI =
-        getAnalysis<TargetTransformInfoWrapperPass>().getTTI(
-            *GEP->getParent()->getParent());
+    TargetTransformInfo &TTI = getAnalysis<TargetTransformInfo>();
     if (!TTI.isLegalAddressingMode(GEP->getType()->getElementType(),
                                    /*BaseGV=*/nullptr, AccumulativeByteOffset,
                                    /*HasBaseReg=*/true, /*Scale=*/0)) {
@@ -913,7 +910,7 @@ bool SeparateConstOffsetFromGEP::splitGEP(GetElementPtrInst *GEP) {
   if (LowerGEP) {
     // As currently BasicAA does not analyze ptrtoint/inttoptr, do not lower to
     // arithmetic operations if the target uses alias analysis in codegen.
-    if (TM && TM->getSubtargetImpl(*GEP->getParent()->getParent())->useAA())
+    if (TM && TM->getSubtarget<TargetSubtargetInfo>().useAA())
       lowerToSingleIndexGEPs(GEP, AccumulativeByteOffset);
     else
       lowerToArithmetics(GEP, AccumulativeByteOffset);
@@ -999,9 +996,6 @@ bool SeparateConstOffsetFromGEP::splitGEP(GetElementPtrInst *GEP) {
 }
 
 bool SeparateConstOffsetFromGEP::runOnFunction(Function &F) {
-  if (skipOptnoneFunction(F))
-    return false;
-
   if (DisableSeparateConstOffsetFromGEP)
     return false;
 

@@ -404,7 +404,6 @@ HexagonTargetLowering::LowerCall(TargetLowering::CallLoweringInfo &CLI,
   bool &isTailCall                      = CLI.IsTailCall;
   CallingConv::ID CallConv              = CLI.CallConv;
   bool isVarArg                         = CLI.IsVarArg;
-  bool doesNotReturn                    = CLI.DoesNotReturn;
 
   bool IsStructRet    = (Outs.empty()) ? false : Outs[0].Flags.isSRet();
 
@@ -598,8 +597,7 @@ HexagonTargetLowering::LowerCall(TargetLowering::CallLoweringInfo &CLI,
   if (isTailCall)
     return DAG.getNode(HexagonISD::TC_RETURN, dl, NodeTys, Ops);
 
-  int OpCode = doesNotReturn ? HexagonISD::CALLv3nr : HexagonISD::CALLv3;
-  Chain = DAG.getNode(OpCode, dl, NodeTys, Ops);
+  Chain = DAG.getNode(HexagonISD::CALL, dl, NodeTys, Ops);
   InFlag = Chain.getValue(1);
 
   // Create the CALLSEQ_END node.
@@ -877,7 +875,7 @@ const {
           RegInfo.createVirtualRegister(&Hexagon::IntRegsRegClass);
         RegInfo.addLiveIn(VA.getLocReg(), VReg);
         InVals.push_back(DAG.getCopyFromReg(Chain, dl, VReg, RegVT));
-      } else if (RegVT == MVT::i64 || RegVT == MVT::f64) {
+      } else if (RegVT == MVT::i64) {
         unsigned VReg =
           RegInfo.createVirtualRegister(&Hexagon::DoubleRegsRegClass);
         RegInfo.addLiveIn(VA.getLocReg(), VReg);
@@ -1111,10 +1109,6 @@ HexagonTargetLowering::HexagonTargetLowering(const TargetMachine &targetmachine)
   setLibcallName(RTLIB::DIV_F64, "__hexagon_divdf3");
   setOperationAction(ISD::FDIV, MVT::f64, Expand);
 
-  setLibcallName(RTLIB::ADD_F64, "__hexagon_adddf3");
-  setLibcallName(RTLIB::SUB_F64, "__hexagon_subdf3");
-  setLibcallName(RTLIB::MUL_F64, "__hexagon_muldf3");
-
   setOperationAction(ISD::FSQRT, MVT::f32, Expand);
   setOperationAction(ISD::FSQRT, MVT::f64, Expand);
   setOperationAction(ISD::FSIN, MVT::f32, Expand);
@@ -1123,10 +1117,7 @@ HexagonTargetLowering::HexagonTargetLowering(const TargetMachine &targetmachine)
   if (Subtarget.hasV5TOps()) {
     // Hexagon V5 Support.
     setOperationAction(ISD::FADD, MVT::f32, Legal);
-    setOperationAction(ISD::FADD, MVT::f64, Expand);
-    setOperationAction(ISD::FSUB, MVT::f32, Legal);
-    setOperationAction(ISD::FSUB, MVT::f64, Expand);
-    setOperationAction(ISD::FMUL, MVT::f64, Expand);
+    setOperationAction(ISD::FADD, MVT::f64, Legal);
     setOperationAction(ISD::FP_EXTEND, MVT::f32, Legal);
     setCondCodeAction(ISD::SETOEQ, MVT::f32, Legal);
     setCondCodeAction(ISD::SETOEQ, MVT::f64, Legal);
@@ -1211,14 +1202,11 @@ HexagonTargetLowering::HexagonTargetLowering(const TargetMachine &targetmachine)
     setLibcallName(RTLIB::FPTOUINT_F64_I32, "__hexagon_fixunsdfsi");
     setLibcallName(RTLIB::FPTOUINT_F64_I64, "__hexagon_fixunsdfdi");
 
+    setLibcallName(RTLIB::ADD_F64, "__hexagon_adddf3");
+    setOperationAction(ISD::FADD, MVT::f64, Expand);
 
     setLibcallName(RTLIB::ADD_F32, "__hexagon_addsf3");
     setOperationAction(ISD::FADD, MVT::f32, Expand);
-    setOperationAction(ISD::FADD, MVT::f64, Expand);
-
-    setLibcallName(RTLIB::SUB_F32, "__hexagon_subsf3");
-    setOperationAction(ISD::FSUB, MVT::f32, Expand);
-    setOperationAction(ISD::FSUB, MVT::f64, Expand);
 
     setLibcallName(RTLIB::FPEXT_F32_F64, "__hexagon_extendsfdf2");
     setOperationAction(ISD::FP_EXTEND, MVT::f32, Expand);
@@ -1259,6 +1247,7 @@ HexagonTargetLowering::HexagonTargetLowering(const TargetMachine &targetmachine)
     setLibcallName(RTLIB::OLT_F32, "__hexagon_ltsf2");
     setCondCodeAction(ISD::SETOLT, MVT::f32, Expand);
 
+    setLibcallName(RTLIB::MUL_F64, "__hexagon_muldf3");
     setOperationAction(ISD::FMUL, MVT::f64, Expand);
 
     setLibcallName(RTLIB::MUL_F32, "__hexagon_mulsf3");
@@ -1489,9 +1478,7 @@ HexagonTargetLowering::getTargetNodeName(unsigned Opcode) const {
     case HexagonISD::Lo:          return "HexagonISD::Lo";
     case HexagonISD::FTOI:        return "HexagonISD::FTOI";
     case HexagonISD::ITOF:        return "HexagonISD::ITOF";
-    case HexagonISD::CALLv3:      return "HexagonISD::CALLv3";
-    case HexagonISD::CALLv3nr:    return "HexagonISD::CALLv3nr";
-    case HexagonISD::CALLR:       return "HexagonISD::CALLR";
+    case HexagonISD::CALL:        return "HexagonISD::CALL";
     case HexagonISD::RET_FLAG:    return "HexagonISD::RET_FLAG";
     case HexagonISD::BR_JT:       return "HexagonISD::BR_JT";
     case HexagonISD::TC_RETURN:   return "HexagonISD::TC_RETURN";

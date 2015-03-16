@@ -33,10 +33,14 @@ void HexagonTargetObjectFile::Initialize(MCContext &Ctx,
   TargetLoweringObjectFileELF::Initialize(Ctx, TM);
   InitializeELF(TM.Options.UseInitArray);
 
-  SmallDataSection = getContext().getELFSection(
-      ".sdata", ELF::SHT_PROGBITS, ELF::SHF_WRITE | ELF::SHF_ALLOC);
-  SmallBSSSection = getContext().getELFSection(".sbss", ELF::SHT_NOBITS,
-                                               ELF::SHF_WRITE | ELF::SHF_ALLOC);
+  SmallDataSection =
+    getContext().getELFSection(".sdata", ELF::SHT_PROGBITS,
+                               ELF::SHF_WRITE | ELF::SHF_ALLOC,
+                               SectionKind::getDataRel());
+  SmallBSSSection =
+    getContext().getELFSection(".sbss", ELF::SHT_NOBITS,
+                               ELF::SHF_WRITE | ELF::SHF_ALLOC,
+                               SectionKind::getBSS());
 }
 
 // sdata/sbss support taken largely from the MIPS Backend.
@@ -75,7 +79,8 @@ IsGlobalInSmallSection(const GlobalValue *GV, const TargetMachine &TM,
 
   if (Kind.isBSS() || Kind.isDataNoRel() || Kind.isCommon()) {
     Type *Ty = GV->getType()->getElementType();
-    return IsInSmallSection(TM.getDataLayout()->getTypeAllocSize(Ty));
+    return IsInSmallSection(
+        TM.getSubtargetImpl()->getDataLayout()->getTypeAllocSize(Ty));
   }
 
   return false;

@@ -777,13 +777,15 @@ bool EarlyIfConverter::runOnMachineFunction(MachineFunction &MF) {
   DEBUG(dbgs() << "********** EARLY IF-CONVERSION **********\n"
                << "********** Function: " << MF.getName() << '\n');
   // Only run if conversion if the target wants it.
-  const TargetSubtargetInfo &STI = MF.getSubtarget();
-  if (!STI.enableEarlyIfConversion())
+  if (!MF.getTarget()
+           .getSubtarget<TargetSubtargetInfo>()
+           .enableEarlyIfConversion())
     return false;
 
-  TII = STI.getInstrInfo();
-  TRI = STI.getRegisterInfo();
-  SchedModel = STI.getSchedModel();
+  TII = MF.getSubtarget().getInstrInfo();
+  TRI = MF.getSubtarget().getRegisterInfo();
+  SchedModel =
+    MF.getTarget().getSubtarget<TargetSubtargetInfo>().getSchedModel();
   MRI = &MF.getRegInfo();
   DomTree = &getAnalysis<MachineDominatorTree>();
   Loops = getAnalysisIfAvailable<MachineLoopInfo>();

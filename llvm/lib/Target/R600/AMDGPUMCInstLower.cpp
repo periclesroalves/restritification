@@ -93,12 +93,11 @@ void AMDGPUMCInstLower::lower(const MachineInstr *MI, MCInst &OutMI) const {
 
 void AMDGPUAsmPrinter::EmitInstruction(const MachineInstr *MI) {
   AMDGPUMCInstLower MCInstLowering(OutContext,
-                                   MF->getSubtarget<AMDGPUSubtarget>());
+                               MF->getTarget().getSubtarget<AMDGPUSubtarget>());
 
 #ifdef _DEBUG
   StringRef Err;
-  if (!MF->getSubtarget<AMDGPUSubtarget>().getInstrInfo()->verifyInstruction(
-          MI, Err)) {
+  if (!TM.getSubtargetImpl()->getInstrInfo()->verifyInstruction(MI, Err)) {
     errs() << "Warning: Illegal instruction detected: " << Err << "\n";
     MI->dump();
   }
@@ -123,8 +122,8 @@ void AMDGPUAsmPrinter::EmitInstruction(const MachineInstr *MI) {
       raw_string_ostream DisasmStream(DisasmLine);
 
       AMDGPUInstPrinter InstPrinter(*TM.getMCAsmInfo(),
-                                    *MF->getSubtarget().getInstrInfo(),
-                                    *MF->getSubtarget().getRegisterInfo());
+                                    *TM.getSubtargetImpl()->getInstrInfo(),
+                                    *TM.getSubtargetImpl()->getRegisterInfo());
       InstPrinter.printInst(&TmpInst, DisasmStream, StringRef());
 
       // Disassemble instruction/operands to hex representation.
@@ -135,7 +134,7 @@ void AMDGPUAsmPrinter::EmitInstruction(const MachineInstr *MI) {
       MCObjectStreamer &ObjStreamer = (MCObjectStreamer &)OutStreamer;
       MCCodeEmitter &InstEmitter = ObjStreamer.getAssembler().getEmitter();
       InstEmitter.EncodeInstruction(TmpInst, CodeStream, Fixups,
-                                    MF->getSubtarget<MCSubtargetInfo>());
+                                    TM.getSubtarget<MCSubtargetInfo>());
       CodeStream.flush();
 
       HexLines.resize(HexLines.size() + 1);

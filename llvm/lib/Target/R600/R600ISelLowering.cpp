@@ -30,9 +30,9 @@
 
 using namespace llvm;
 
-R600TargetLowering::R600TargetLowering(TargetMachine &TM,
-                                       const AMDGPUSubtarget &STI)
-    : AMDGPUTargetLowering(TM, STI), Gen(STI.getGeneration()) {
+R600TargetLowering::R600TargetLowering(TargetMachine &TM) :
+    AMDGPUTargetLowering(TM),
+    Gen(TM.getSubtarget<AMDGPUSubtarget>().getGeneration()) {
   addRegisterClass(MVT::v4f32, &AMDGPU::R600_Reg128RegClass);
   addRegisterClass(MVT::f32, &AMDGPU::R600_Reg32RegClass);
   addRegisterClass(MVT::v4i32, &AMDGPU::R600_Reg128RegClass);
@@ -197,7 +197,7 @@ MachineBasicBlock * R600TargetLowering::EmitInstrWithCustomInserter(
   MachineRegisterInfo &MRI = MF->getRegInfo();
   MachineBasicBlock::iterator I = *MI;
   const R600InstrInfo *TII =
-      static_cast<const R600InstrInfo *>(Subtarget->getInstrInfo());
+      static_cast<const R600InstrInfo *>(MF->getSubtarget().getInstrInfo());
 
   switch (MI->getOpcode()) {
   default:
@@ -652,8 +652,9 @@ SDValue R600TargetLowering::LowerOperation(SDValue Op, SelectionDAG &DAG) const 
       int ijb = cast<ConstantSDNode>(Op.getOperand(2))->getSExtValue();
       MachineSDNode *interp;
       if (ijb < 0) {
-        const R600InstrInfo *TII =
-            static_cast<const R600InstrInfo *>(Subtarget->getInstrInfo());
+        const MachineFunction &MF = DAG.getMachineFunction();
+        const R600InstrInfo *TII = static_cast<const R600InstrInfo *>(
+            MF.getSubtarget().getInstrInfo());
         interp = DAG.getMachineNode(AMDGPU::INTERP_VEC_LOAD, DL,
             MVT::v4f32, DAG.getTargetConstant(slot / 4 , MVT::i32));
         return DAG.getTargetExtractSubreg(
@@ -1380,8 +1381,8 @@ SDValue R600TargetLowering::LowerSTORE(SDValue Op, SelectionDAG &DAG) const {
   // Lowering for indirect addressing
 
   const MachineFunction &MF = DAG.getMachineFunction();
-  const AMDGPUFrameLowering *TFL =
-      static_cast<const AMDGPUFrameLowering *>(Subtarget->getFrameLowering());
+  const AMDGPUFrameLowering *TFL = static_cast<const AMDGPUFrameLowering *>(
+      getTargetMachine().getSubtargetImpl()->getFrameLowering());
   unsigned StackWidth = TFL->getStackWidth(MF);
 
   Ptr = stackPtrToRegIndex(Ptr, StackWidth, DAG);
@@ -1578,8 +1579,8 @@ SDValue R600TargetLowering::LowerLOAD(SDValue Op, SelectionDAG &DAG) const
 
   // Lowering for indirect addressing
   const MachineFunction &MF = DAG.getMachineFunction();
-  const AMDGPUFrameLowering *TFL =
-      static_cast<const AMDGPUFrameLowering *>(Subtarget->getFrameLowering());
+  const AMDGPUFrameLowering *TFL = static_cast<const AMDGPUFrameLowering *>(
+      getTargetMachine().getSubtargetImpl()->getFrameLowering());
   unsigned StackWidth = TFL->getStackWidth(MF);
 
   Ptr = stackPtrToRegIndex(Ptr, StackWidth, DAG);

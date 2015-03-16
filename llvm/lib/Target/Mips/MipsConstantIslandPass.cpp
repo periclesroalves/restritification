@@ -448,12 +448,14 @@ bool MipsConstantIslands::runOnMachineFunction(MachineFunction &mf) {
   // FIXME:
   MF = &mf;
   MCP = mf.getConstantPool();
-  STI = &static_cast<const MipsSubtarget &>(mf.getSubtarget());
+  STI = &mf.getTarget().getSubtarget<MipsSubtarget>();
   DEBUG(dbgs() << "constant island machine function " << "\n");
   if (!STI->inMips16Mode() || !MipsSubtarget::useConstantIslands()) {
     return false;
   }
-  TII = (const Mips16InstrInfo *)STI->getInstrInfo();
+  TII = (const Mips16InstrInfo *)MF->getTarget()
+            .getSubtargetImpl()
+            ->getInstrInfo();
   MFI = MF->getInfo<MipsFunctionInfo>();
   DEBUG(dbgs() << "constant island processing " << "\n");
   //
@@ -560,7 +562,7 @@ MipsConstantIslands::doInitialPlacement(std::vector<MachineInstr*> &CPEMIs) {
   // identity mapping of CPI's to CPE's.
   const std::vector<MachineConstantPoolEntry> &CPs = MCP->getConstants();
 
-  const DataLayout &TD = *MF->getTarget().getDataLayout();
+  const DataLayout &TD = *MF->getSubtarget().getDataLayout();
   for (unsigned i = 0, e = CPs.size(); i != e; ++i) {
     unsigned Size = TD.getTypeAllocSize(CPs[i].getType());
     assert(Size >= 4 && "Too small constant pool entry");

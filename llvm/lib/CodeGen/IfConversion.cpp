@@ -271,13 +271,15 @@ INITIALIZE_PASS_DEPENDENCY(MachineBranchProbabilityInfo)
 INITIALIZE_PASS_END(IfConverter, "if-converter", "If Converter", false, false)
 
 bool IfConverter::runOnMachineFunction(MachineFunction &MF) {
-  const TargetSubtargetInfo &ST = MF.getSubtarget();
-  TLI = ST.getTargetLowering();
-  TII = ST.getInstrInfo();
-  TRI = ST.getRegisterInfo();
+  TLI = MF.getSubtarget().getTargetLowering();
+  TII = MF.getSubtarget().getInstrInfo();
+  TRI = MF.getSubtarget().getRegisterInfo();
   MBFI = &getAnalysis<MachineBlockFrequencyInfo>();
   MBPI = &getAnalysis<MachineBranchProbabilityInfo>();
   MRI = &MF.getRegInfo();
+
+  const TargetSubtargetInfo &ST =
+    MF.getTarget().getSubtarget<TargetSubtargetInfo>();
   SchedModel.init(ST.getSchedModel(), &ST, TII);
 
   if (!TII) return false;
@@ -288,7 +290,7 @@ bool IfConverter::runOnMachineFunction(MachineFunction &MF) {
   if (!PreRegAlloc) {
     // Tail merge tend to expose more if-conversion opportunities.
     BranchFolder BF(true, false, *MBFI, *MBPI);
-    BFChange = BF.OptimizeFunction(MF, TII, ST.getRegisterInfo(),
+    BFChange = BF.OptimizeFunction(MF, TII, MF.getSubtarget().getRegisterInfo(),
                                    getAnalysisIfAvailable<MachineModuleInfo>());
   }
 

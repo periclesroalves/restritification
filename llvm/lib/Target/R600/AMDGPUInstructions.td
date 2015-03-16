@@ -438,11 +438,6 @@ def FP_ONE : PatLeaf <
   [{return N->isExactlyValue(1.0);}]
 >;
 
-def FP_HALF : PatLeaf <
-  (fpimm),
-  [{return N->isExactlyValue(0.5);}]
->;
-
 let isCodeGenOnly = 1, isPseudo = 1 in {
 
 let usesCustomInserter = 1  in {
@@ -607,20 +602,6 @@ class ROTRPattern <Instruction BIT_ALIGN> : Pat <
 
 // 24-bit arithmetic patterns
 def umul24 : PatFrag <(ops node:$x, node:$y), (mul node:$x, node:$y)>;
-
-// Special conversion patterns
-
-def cvt_rpi_i32_f32 : PatFrag <
-  (ops node:$src),
-  (fp_to_sint (ffloor (fadd $src, FP_HALF))),
-  [{ (void) N; return TM.Options.NoNaNsFPMath; }]
->;
-
-def cvt_flr_i32_f32 : PatFrag <
-  (ops node:$src),
-  (fp_to_sint (ffloor $src)),
-  [{ (void)N; return TM.Options.NoNaNsFPMath; }]
->;
 
 /*
 class UMUL24Pattern <Instruction UMUL24> : Pat <

@@ -18,7 +18,6 @@
 #include "llvm/LTO/LTOCodeGenerator.h"
 #include "llvm/LTO/LTOModule.h"
 #include "llvm/Support/MemoryBuffer.h"
-#include "llvm/Support/Signals.h"
 #include "llvm/Support/TargetSelect.h"
 
 // extra command-line flags needed for LTOCodeGenerator
@@ -52,12 +51,6 @@ static bool parsedOptions = false;
 // Initialize the configured targets if they have not been initialized.
 static void lto_initialize() {
   if (!initialized) {
-#ifdef LLVM_ON_WIN32
-    // Dialog box on crash disabling doesn't work across DLL boundaries, so do
-    // it here.
-    llvm::sys::DisableSystemDialogsOnCrash();
-#endif
-
     InitializeAllTargetInfos();
     InitializeAllTargets();
     InitializeAllTargetMCs();

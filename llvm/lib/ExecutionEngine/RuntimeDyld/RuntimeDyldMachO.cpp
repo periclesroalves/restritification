@@ -64,12 +64,11 @@ RelocationValueRef RuntimeDyldMachO::getRelocationValueRef(
     symbol_iterator Symbol = RI->getSymbol();
     StringRef TargetName;
     Symbol->getName(TargetName);
-    RTDyldSymbolTable::const_iterator SI =
+    SymbolTableMap::const_iterator SI =
       GlobalSymbolTable.find(TargetName.data());
     if (SI != GlobalSymbolTable.end()) {
-      const auto &SymInfo = SI->second;
-      Value.SectionID = SymInfo.getSectionID();
-      Value.Offset = SymInfo.getOffset() + RE.Addend;
+      Value.SectionID = SI->second.first;
+      Value.Offset = SI->second.second + RE.Addend;
     } else {
       Value.SymbolName = TargetName.data();
       Value.Offset = RE.Addend;

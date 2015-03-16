@@ -35,9 +35,8 @@
 
 using namespace llvm;
 
-SITargetLowering::SITargetLowering(TargetMachine &TM,
-                                   const AMDGPUSubtarget &STI)
-    : AMDGPUTargetLowering(TM, STI) {
+SITargetLowering::SITargetLowering(TargetMachine &TM) :
+    AMDGPUTargetLowering(TM) {
   addRegisterClass(MVT::i1, &AMDGPU::VReg_1RegClass);
   addRegisterClass(MVT::i64, &AMDGPU::SReg_64RegClass);
 
@@ -315,8 +314,9 @@ bool SITargetLowering::allowsMisalignedMemoryAccesses(EVT VT,
   if (!VT.isSimple() || VT == MVT::Other)
     return false;
 
-  // TODO - CI+ supports unaligned memory accesses, but this requires driver
-  // support.
+  // XXX - CI changes say "Support for unaligned memory accesses" but I don't
+  // see what for specifically. The wording everywhere else seems to be the
+  // same.
 
   // XXX - The only mention I see of this in the ISA manual is for LDS direct
   // reads the "byte address and must be dword aligned". Is it also true for the
@@ -333,8 +333,7 @@ bool SITargetLowering::allowsMisalignedMemoryAccesses(EVT VT,
   // This applies to private, global, and constant memory.
   if (IsFast)
     *IsFast = true;
-
-  return VT.bitsGT(MVT::i32) && Align % 4 == 0;
+  return VT.bitsGT(MVT::i32);
 }
 
 EVT SITargetLowering::getOptimalMemOpType(uint64_t Size, unsigned DstAlign,
@@ -367,8 +366,8 @@ SITargetLowering::getPreferredVectorAction(EVT VT) const {
 
 bool SITargetLowering::shouldConvertConstantLoadToIntImm(const APInt &Imm,
                                                          Type *Ty) const {
-  const SIInstrInfo *TII =
-      static_cast<const SIInstrInfo *>(Subtarget->getInstrInfo());
+  const SIInstrInfo *TII = static_cast<const SIInstrInfo *>(
+      getTargetMachine().getSubtargetImpl()->getInstrInfo());
   return TII->isInlineConstant(Imm);
 }
 
@@ -401,11 +400,16 @@ SDValue SITargetLowering::LowerParameter(SelectionDAG &DAG, EVT VT, EVT MemVT,
 }
 
 SDValue SITargetLowering::LowerFormalArguments(
-    SDValue Chain, CallingConv::ID CallConv, bool isVarArg,
-    const SmallVectorImpl<ISD::InputArg> &Ins, SDLoc DL, SelectionDAG &DAG,
-    SmallVectorImpl<SDValue> &InVals) const {
+                                      SDValue Chain,
+                                      CallingConv::ID CallConv,
+                                      bool isVarArg,
+                                      const SmallVectorImpl<ISD::InputArg> &Ins,
+                                      SDLoc DL, SelectionDAG &DAG,
+                                      SmallVectorImpl<SDValue> &InVals) const {
+
+  const TargetMachine &TM = getTargetMachine();
   const SIRegisterInfo *TRI =
-      static_cast<const SIRegisterInfo *>(Subtarget->getRegisterInfo());
+      static_cast<const SIRegisterInfo*>(TM.getSubtargetImpl()->getRegisterInfo());
 
   MachineFunction &MF = DAG.getMachineFunction();
   FunctionType *FType = MF.getFunction()->getFunctionType();
@@ -597,8 +601,8 @@ MachineBasicBlock * SITargetLowering::EmitInstrWithCustomInserter(
     MachineInstr * MI, MachineBasicBlock * BB) const {
 
   MachineBasicBlock::iterator I = *MI;
-  const SIInstrInfo *TII =
-      static_cast<const SIInstrInfo *>(Subtarget->getInstrInfo());
+  const SIInstrInfo *TII = static_cast<const SIInstrInfo *>(
+      getTargetMachine().getSubtargetImpl()->getInstrInfo());
 
   switch (MI->getOpcode()) {
   default:
@@ -632,17 +636,6 @@ MachineBasicBlock * SITargetLowering::EmitInstrWithCustomInserter(
   return BB;
 }
 
-bool SITargetLowering::enableAggressiveFMAFusion(EVT VT) const {
-  // This currently forces unfolding various combinations of fsub into fma with
-  // free fneg'd operands. As long as we have fast FMA (controlled by
-  // isFMAFasterThanFMulAndFAdd), we should perform these.
-
-  // When fma is quarter rate, for f64 where add / sub are at best half rate,
-  // most of these combines appear to be cycle neutral but save on instruction
-  // count / code size.
-  return true;
-}
-
 EVT SITargetLowering::getSetCCResultType(LLVMContext &Ctx, EVT VT) const {
   if (!VT.isVector()) {
     return MVT::i1;
@@ -654,21 +647,6 @@ MVT SITargetLowering::getScalarShiftAmountTy(EVT VT) const {
   return MVT::i32;
 }
 
-// Answering this is somewhat tricky and depends on the specific device which
-// have different rates for fma or all f64 operations.
-//
-// v_fma_f64 and v_mul_f64 always take the same number of cycles as each other
-// regardless of which device (although the number of cycles differs between
-// devices), so it is always profitable for f64.
-//
-// v_fma_f32 takes 4 or 16 cycles depending on the device, so it is profitable
-// only on full rate devices. Normally, we should prefer selecting v_mad_f32
-// which we can always do even without fused FP ops since it returns the same
-// result as the separate operations and since it is always full
-// rate. Therefore, we lie and report that it is not faster for f32. v_mad_f32
-// however does not support denormals, so we do report fma as faster if we have
-// a fast fma device and require denormals.
-//
 bool SITargetLowering::isFMAFasterThanFMulAndFAdd(EVT VT) const {
   VT = VT.getScalarType();
 
@@ -677,10 +655,7 @@ bool SITargetLowering::isFMAFasterThanFMulAndFAdd(EVT VT) const {
 
   switch (VT.getSimpleVT().SimpleTy) {
   case MVT::f32:
-    // This is as fast on some subtargets. However, we always have full rate f32
-    // mad available which returns the same result as the separate operations
-    // which we should prefer over fma.
-    return false;
+    return false; /* There is V_MAD_F32 for f32 */
   case MVT::f64:
     return true;
   default:
@@ -860,7 +835,7 @@ SDValue SITargetLowering::LowerINTRINSIC_WO_CHAIN(SDValue Op,
                                                   SelectionDAG &DAG) const {
   MachineFunction &MF = DAG.getMachineFunction();
   const SIRegisterInfo *TRI =
-      static_cast<const SIRegisterInfo *>(Subtarget->getRegisterInfo());
+      static_cast<const SIRegisterInfo*>(MF.getSubtarget().getRegisterInfo());
 
   EVT VT = Op.getValueType();
   SDLoc DL(Op);
@@ -1331,8 +1306,8 @@ SDValue SITargetLowering::performSHLPtrCombine(SDNode *N,
   if (!CAdd)
     return SDValue();
 
-  const SIInstrInfo *TII =
-      static_cast<const SIInstrInfo *>(Subtarget->getInstrInfo());
+  const SIInstrInfo *TII = static_cast<const SIInstrInfo *>(
+      getTargetMachine().getSubtargetImpl()->getInstrInfo());
 
   // If the resulting offset is too large, we can't fold it into the addressing
   // mode offset.
@@ -1734,8 +1709,8 @@ static bool isVSrc(unsigned RegClass) {
 /// and the immediate value if it's a literal immediate
 int32_t SITargetLowering::analyzeImmediate(const SDNode *N) const {
 
-  const SIInstrInfo *TII =
-      static_cast<const SIInstrInfo *>(Subtarget->getInstrInfo());
+  const SIInstrInfo *TII = static_cast<const SIInstrInfo *>(
+    getTargetMachine().getSubtargetImpl()->getInstrInfo());
 
   if (const ConstantSDNode *Node = dyn_cast<ConstantSDNode>(N)) {
     if (Node->getZExtValue() >> 32)
@@ -1760,11 +1735,10 @@ int32_t SITargetLowering::analyzeImmediate(const SDNode *N) const {
   return -1;
 }
 
-const TargetRegisterClass *
-SITargetLowering::getRegClassForNode(SelectionDAG &DAG,
-                                     const SDValue &Op) const {
-  const SIInstrInfo *TII =
-      static_cast<const SIInstrInfo *>(Subtarget->getInstrInfo());
+const TargetRegisterClass *SITargetLowering::getRegClassForNode(
+                                   SelectionDAG &DAG, const SDValue &Op) const {
+  const SIInstrInfo *TII = static_cast<const SIInstrInfo *>(
+      getTargetMachine().getSubtargetImpl()->getInstrInfo());
   const SIRegisterInfo &TRI = TII->getRegisterInfo();
 
   if (!Op->isMachineOpcode()) {
@@ -1815,7 +1789,8 @@ SITargetLowering::getRegClassForNode(SelectionDAG &DAG,
 /// \brief Does "Op" fit into register class "RegClass" ?
 bool SITargetLowering::fitsRegClass(SelectionDAG &DAG, const SDValue &Op,
                                     unsigned RegClass) const {
-  const TargetRegisterInfo *TRI = Subtarget->getRegisterInfo();
+  const TargetRegisterInfo *TRI =
+      getTargetMachine().getSubtargetImpl()->getRegisterInfo();
   const TargetRegisterClass *RC = getRegClassForNode(DAG, Op);
   if (!RC) {
     return false;
@@ -1939,8 +1914,8 @@ void SITargetLowering::legalizeTargetIndependentNode(SDNode *Node,
 /// \brief Fold the instructions after selecting them.
 SDNode *SITargetLowering::PostISelFolding(MachineSDNode *Node,
                                           SelectionDAG &DAG) const {
-  const SIInstrInfo *TII =
-      static_cast<const SIInstrInfo *>(Subtarget->getInstrInfo());
+  const SIInstrInfo *TII = static_cast<const SIInstrInfo *>(
+      getTargetMachine().getSubtargetImpl()->getInstrInfo());
   Node = AdjustRegClass(Node, DAG);
 
   if (TII->isMIMG(Node->getMachineOpcode()))
@@ -1958,8 +1933,8 @@ SDNode *SITargetLowering::PostISelFolding(MachineSDNode *Node,
 /// bits set in the writemask
 void SITargetLowering::AdjustInstrPostInstrSelection(MachineInstr *MI,
                                                      SDNode *Node) const {
-  const SIInstrInfo *TII =
-      static_cast<const SIInstrInfo *>(Subtarget->getInstrInfo());
+  const SIInstrInfo *TII = static_cast<const SIInstrInfo *>(
+      getTargetMachine().getSubtargetImpl()->getInstrInfo());
 
   MachineRegisterInfo &MRI = MI->getParent()->getParent()->getRegInfo();
   TII->legalizeOperands(MI);
@@ -2005,8 +1980,8 @@ static SDValue buildSMovImm32(SelectionDAG &DAG, SDLoc DL, uint64_t Val) {
 MachineSDNode *SITargetLowering::wrapAddr64Rsrc(SelectionDAG &DAG,
                                                 SDLoc DL,
                                                 SDValue Ptr) const {
-  const SIInstrInfo *TII =
-      static_cast<const SIInstrInfo *>(Subtarget->getInstrInfo());
+  const SIInstrInfo *TII = static_cast<const SIInstrInfo *>(
+      getTargetMachine().getSubtargetImpl()->getInstrInfo());
 #if 1
     // XXX - Workaround for moveToVALU not handling different register class
     // inserts for REG_SEQUENCE.
@@ -2087,8 +2062,8 @@ MachineSDNode *SITargetLowering::buildRSRC(SelectionDAG &DAG,
 MachineSDNode *SITargetLowering::buildScratchRSRC(SelectionDAG &DAG,
                                                   SDLoc DL,
                                                   SDValue Ptr) const {
-  const SIInstrInfo *TII =
-      static_cast<const SIInstrInfo *>(Subtarget->getInstrInfo());
+  const SIInstrInfo *TII = static_cast<const SIInstrInfo *>(
+      getTargetMachine().getSubtargetImpl()->getInstrInfo());
   uint64_t Rsrc = TII->getDefaultRsrcDataFormat() | AMDGPU::RSRC_TID_ENABLE |
                   0xffffffff; // Size
 

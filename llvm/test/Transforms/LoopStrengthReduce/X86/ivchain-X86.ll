@@ -59,9 +59,7 @@ exit:
 ;
 ; X32: @user
 ; expensive address computation in the preheader
-; X32: shll $4
-; X32: lea
-; X32: lea
+; X32: imul
 ; X32: %loop
 ; complex address modes
 ; X32: (%{{[^)]+}},%{{[^)]+}},

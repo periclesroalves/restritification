@@ -28,7 +28,7 @@
 #include "llvm/IR/IntrinsicInst.h"
 #include "llvm/Support/Debug.h"
 #include "llvm/Support/raw_ostream.h"
-#include "llvm/Analysis/TargetLibraryInfo.h"
+#include "llvm/Target/TargetLibraryInfo.h"
 #include "llvm/Transforms/Utils/Local.h"
 #include <list>
 using namespace llvm;
@@ -334,7 +334,7 @@ namespace {
       AU.addRequired<DominatorTreeWrapperPass>();
       AU.addRequired<MemoryDependenceAnalysis>();
       AU.addRequired<AliasAnalysis>();
-      AU.addRequired<TargetLibraryInfoWrapperPass>();
+      AU.addRequired<TargetLibraryInfo>();
       AU.addPreserved<AliasAnalysis>();
       AU.addPreserved<MemoryDependenceAnalysis>();
     }
@@ -366,7 +366,7 @@ INITIALIZE_PASS_BEGIN(MemCpyOpt, "memcpyopt", "MemCpy Optimization",
 INITIALIZE_PASS_DEPENDENCY(AssumptionCacheTracker)
 INITIALIZE_PASS_DEPENDENCY(DominatorTreeWrapperPass)
 INITIALIZE_PASS_DEPENDENCY(MemoryDependenceAnalysis)
-INITIALIZE_PASS_DEPENDENCY(TargetLibraryInfoWrapperPass)
+INITIALIZE_PASS_DEPENDENCY(TargetLibraryInfo)
 INITIALIZE_AG_DEPENDENCY(AliasAnalysis)
 INITIALIZE_PASS_END(MemCpyOpt, "memcpyopt", "MemCpy Optimization",
                     false, false)
@@ -750,6 +750,16 @@ bool MemCpyOpt::performCallSlotOptzn(Instruction *cpy,
   // its dependence information by changing its parameter.
   MD->removeInstruction(C);
 
+  // Update AA metadata
+  // FIXME: MD_tbaa_struct and MD_mem_parallel_loop_access should also be
+  // handled here, but combineMetadata doesn't support them yet
+  unsigned KnownIDs[] = {
+    LLVMContext::MD_tbaa,
+    LLVMContext::MD_alias_scope,
+    LLVMContext::MD_noalias,
+  };
+  combineMetadata(C, cpy, KnownIDs);
+
   // Remove the memcpy.
   MD->removeInstruction(cpy);
   ++NumMemCpyInstr;
@@ -1069,7 +1079,7 @@ bool MemCpyOpt::runOnFunction(Function &F) {
   MD = &getAnalysis<MemoryDependenceAnalysis>();
   DataLayoutPass *DLP = getAnalysisIfAvailable<DataLayoutPass>();
   DL = DLP ? &DLP->getDataLayout() : nullptr;
-  TLI = &getAnalysis<TargetLibraryInfoWrapperPass>().getTLI();
+  TLI = &getAnalysis<TargetLibraryInfo>();
 
   // If we don't have at least memset and memcpy, there is little point of doing
   // anything here.  These are required by a freestanding implementation, so if

@@ -51,7 +51,7 @@ namespace {
   struct PadShortFunc : public MachineFunctionPass {
     static char ID;
     PadShortFunc() : MachineFunctionPass(ID)
-                   , Threshold(4), STI(nullptr), TII(nullptr) {}
+                   , Threshold(4), TM(nullptr), TII(nullptr) {}
 
     bool runOnMachineFunction(MachineFunction &MF) override;
 
@@ -79,7 +79,7 @@ namespace {
     // VisitedBBs - Cache of previously visited BBs.
     DenseMap<MachineBasicBlock*, VisitedBBInfo> VisitedBBs;
 
-    const X86Subtarget *STI;
+    const TargetMachine *TM;
     const TargetInstrInfo *TII;
   };
 
@@ -101,11 +101,11 @@ bool PadShortFunc::runOnMachineFunction(MachineFunction &MF) {
     return false;
   }
 
-  STI = &MF.getSubtarget<X86Subtarget>();
-  if (!STI->padShortFunctions())
+  TM = &MF.getTarget();
+  if (!TM->getSubtarget<X86Subtarget>().padShortFunctions())
     return false;
 
-  TII = STI->getInstrInfo();
+  TII = TM->getSubtargetImpl()->getInstrInfo();
 
   // Search through basic blocks and mark the ones that have early returns
   ReturnBBs.clear();
@@ -195,7 +195,8 @@ bool PadShortFunc::cyclesUntilReturn(MachineBasicBlock *MBB,
       return true;
     }
 
-    CyclesToEnd += TII->getInstrLatency(STI->getInstrItineraryData(), MI);
+    CyclesToEnd += TII->getInstrLatency(
+        TM->getSubtargetImpl()->getInstrItineraryData(), MI);
   }
 
   VisitedBBs[MBB] = VisitedBBInfo(false, CyclesToEnd);

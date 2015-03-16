@@ -54,7 +54,7 @@ void MachineFunctionPass::getAnalysisUsage(AnalysisUsage &AU) const {
   AU.addPreserved<DominanceFrontier>();
   AU.addPreserved<DominatorTreeWrapperPass>();
   AU.addPreserved<IVUsers>();
-  AU.addPreserved<LoopInfoWrapperPass>();
+  AU.addPreserved<LoopInfo>();
   AU.addPreserved<MemoryDependenceAnalysis>();
   AU.addPreserved<ScalarEvolution>();
   AU.addPreserved<StackProtector>();

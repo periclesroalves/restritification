@@ -34,14 +34,14 @@ class Target;
 class DataLayout;
 class TargetLibraryInfo;
 class TargetFrameLowering;
-class TargetIRAnalysis;
 class TargetIntrinsicInfo;
 class TargetLowering;
 class TargetPassConfig;
 class TargetRegisterInfo;
 class TargetSelectionDAGInfo;
 class TargetSubtargetInfo;
-class TargetTransformInfo;
+class ScalarTargetTransformInfo;
+class VectorTargetTransformInfo;
 class formatted_raw_ostream;
 class raw_ostream;
 class TargetLoweringObjectFile;
@@ -117,12 +117,6 @@ public:
     return *static_cast<const STC*>(getSubtargetImpl());
   }
 
-  /// getDataLayout - This method returns a pointer to the DataLayout for
-  /// the target. It should be unchanging for every subtarget.
-  virtual const DataLayout *getDataLayout() const {
-    return nullptr;
-  }
-
   /// \brief Reset the target options based on the function's attributes.
   // FIXME: Remove TargetOptions that affect per-function code generation
   // from TargetMachine.
@@ -188,12 +182,8 @@ public:
   /// sections.
   void setFunctionSections(bool);
 
-  /// \brief Get a \c TargetIRAnalysis appropriate for the target.
-  ///
-  /// This is used to construct the new pass manager's target IR analysis pass,
-  /// set up appropriately for this target machine. Even the old pass manager
-  /// uses this to answer queries about the IR.
-  virtual TargetIRAnalysis getTargetIRAnalysis();
+  /// \brief Register analysis passes for this target with a pass manager.
+  virtual void addAnalysisPasses(PassManagerBase &) {}
 
   /// CodeGenFileType - These enums are meant to be passed into
   /// addPassesToEmitFile to indicate what type of file to emit, and returned by
@@ -246,11 +236,10 @@ protected: // Can only create subclasses.
 
   void initAsmInfo();
 public:
-  /// \brief Get a TargetIRAnalysis implementation for the target.
+  /// \brief Register analysis passes for this target with a pass manager.
   ///
-  /// This analysis will produce a TTI result which uses the common code
-  /// generator to answer queries about the IR.
-  TargetIRAnalysis getTargetIRAnalysis() override;
+  /// This registers target independent analysis passes.
+  void addAnalysisPasses(PassManagerBase &PM) override;
 
   /// createPassConfig - Create a pass configuration object to be used by
   /// addPassToEmitX methods for generating a pipeline of CodeGen passes.

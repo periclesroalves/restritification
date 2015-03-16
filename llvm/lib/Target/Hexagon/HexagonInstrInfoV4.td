@@ -146,8 +146,6 @@ class CmpInReg<PatFrag Op>
 def: T_cmp32_rr_pat<A4_rcmpeq,  CmpInReg<seteq>, i32>;
 def: T_cmp32_rr_pat<A4_rcmpneq, CmpInReg<setne>, i32>;
 
-def: T_cmp32_rr_pat<C4_cmpneq,  setne,  i1>;
-
 class T_CMP_rrbh<string mnemonic, bits<3> MinOp, bit IsComm>
   : SInst<(outs PredRegs:$Pd), (ins IntRegs:$Rs, IntRegs:$Rt),
     "$Pd = "#mnemonic#"($Rs, $Rt)", [], "", S_3op_tc_2early_SLOT23>,
@@ -335,43 +333,21 @@ def A4_combineii: ALU32Inst<(outs DoubleRegs:$Rdd), (ins s8Imm:$s8, u6Ext:$U6),
 //===----------------------------------------------------------------------===//
 // Template class for load instructions with Absolute set addressing mode.
 //===----------------------------------------------------------------------===//
-let isExtended = 1, opExtendable = 2, opExtentBits = 6, addrMode = AbsoluteSet,
-    hasSideEffects = 0 in
-class T_LD_abs_set<string mnemonic, RegisterClass RC, bits<4>MajOp>:
-            LDInst<(outs RC:$dst1, IntRegs:$dst2),
-            (ins u6Ext:$addr),
-            "$dst1 = "#mnemonic#"($dst2 = #$addr)",
-            []> {
-  bits<7> name;
-  bits<5> dst1;
-  bits<5> dst2;
-  bits<6> addr;
+let isExtended = 1, opExtendable = 2, hasSideEffects = 0,
+validSubTargets = HasV4SubT, addrMode = AbsoluteSet in
+class T_LD_abs_set<string mnemonic, RegisterClass RC>:
+            LDInst2<(outs RC:$dst1, IntRegs:$dst2),
+            (ins u0AlwaysExt:$addr),
+            "$dst1 = "#mnemonic#"($dst2=##$addr)",
+            []>,
+            Requires<[HasV4T]>;
 
-  let IClass = 0b1001;
-  let Inst{27-25} = 0b101;
-  let Inst{24-21} = MajOp;
-  let Inst{13-12} = 0b01;
-  let Inst{4-0}   = dst1;
-  let Inst{20-16} = dst2;
-  let Inst{11-8}  = addr{5-2};
-  let Inst{6-5}   = addr{1-0};
-}
-
-let accessSize = ByteAccess, hasNewValue = 1, isCodeGenOnly = 0 in {
-  def L4_loadrb_ap   : T_LD_abs_set <"memb",   IntRegs, 0b1000>;
-  def L4_loadrub_ap  : T_LD_abs_set <"memub",  IntRegs, 0b1001>;
-}
-
-let accessSize = HalfWordAccess, hasNewValue = 1, isCodeGenOnly = 0 in {
-  def L4_loadrh_ap  : T_LD_abs_set <"memh",  IntRegs, 0b1010>;
-  def L4_loadruh_ap : T_LD_abs_set <"memuh", IntRegs, 0b1011>;
-}
-
-let accessSize = WordAccess, hasNewValue = 1, isCodeGenOnly = 0 in
-  def L4_loadri_ap : T_LD_abs_set <"memw", IntRegs, 0b1100>;
-
-let accessSize = DoubleWordAccess, isCodeGenOnly = 0 in
-def L4_loadrd_ap : T_LD_abs_set <"memd", DoubleRegs, 0b1110>;
+def LDrid_abs_set_V4  : T_LD_abs_set <"memd", DoubleRegs>;
+def LDrib_abs_set_V4  : T_LD_abs_set <"memb", IntRegs>;
+def LDriub_abs_set_V4 : T_LD_abs_set <"memub", IntRegs>;
+def LDrih_abs_set_V4  : T_LD_abs_set <"memh", IntRegs>;
+def LDriw_abs_set_V4  : T_LD_abs_set <"memw", IntRegs>;
+def LDriuh_abs_set_V4 : T_LD_abs_set <"memuh", IntRegs>;
 
 //===----------------------------------------------------------------------===//
 // Template classes for the non-predicated load instructions with
@@ -523,21 +499,41 @@ def : Pat <(i64 (load (add IntRegs:$src1,
             Requires<[HasV4T]>;
 }
 
+
 // 'def pats' for load instruction base + register offset and
 // zero immediate value.
-class Loadxs_simple_pat<PatFrag Load, ValueType VT, InstHexagon MI>
-  : Pat<(VT (Load (add (i32 IntRegs:$Rs), (i32 IntRegs:$Rt)))),
-        (VT (MI IntRegs:$Rs, IntRegs:$Rt, 0))>;
+let AddedComplexity = 10 in {
+def : Pat <(i64 (load (add IntRegs:$src1, IntRegs:$src2))),
+           (L4_loadrd_rr IntRegs:$src1, IntRegs:$src2, 0)>,
+            Requires<[HasV4T]>;
 
-let AddedComplexity = 20 in {
-  def: Loadxs_simple_pat<extloadi8,   i32, L4_loadrub_rr>;
-  def: Loadxs_simple_pat<zextloadi8,  i32, L4_loadrub_rr>;
-  def: Loadxs_simple_pat<sextloadi8,  i32, L4_loadrb_rr>;
-  def: Loadxs_simple_pat<extloadi16,  i32, L4_loadruh_rr>;
-  def: Loadxs_simple_pat<zextloadi16, i32, L4_loadruh_rr>;
-  def: Loadxs_simple_pat<sextloadi16, i32, L4_loadrh_rr>;
-  def: Loadxs_simple_pat<load,        i32, L4_loadri_rr>;
-  def: Loadxs_simple_pat<load,        i64, L4_loadrd_rr>;
+def : Pat <(i32 (sextloadi8 (add IntRegs:$src1, IntRegs:$src2))),
+           (L4_loadrb_rr IntRegs:$src1, IntRegs:$src2, 0)>,
+            Requires<[HasV4T]>;
+
+def : Pat <(i32 (zextloadi8 (add IntRegs:$src1, IntRegs:$src2))),
+           (L4_loadrub_rr IntRegs:$src1, IntRegs:$src2, 0)>,
+            Requires<[HasV4T]>;
+
+def : Pat <(i32 (extloadi8 (add IntRegs:$src1, IntRegs:$src2))),
+           (L4_loadrub_rr IntRegs:$src1, IntRegs:$src2, 0)>,
+            Requires<[HasV4T]>;
+
+def : Pat <(i32 (sextloadi16 (add IntRegs:$src1, IntRegs:$src2))),
+           (L4_loadrh_rr IntRegs:$src1, IntRegs:$src2, 0)>,
+            Requires<[HasV4T]>;
+
+def : Pat <(i32 (zextloadi16 (add IntRegs:$src1, IntRegs:$src2))),
+           (L4_loadruh_rr IntRegs:$src1, IntRegs:$src2, 0)>,
+            Requires<[HasV4T]>;
+
+def : Pat <(i32 (extloadi16 (add IntRegs:$src1, IntRegs:$src2))),
+           (L4_loadruh_rr IntRegs:$src1, IntRegs:$src2, 0)>,
+            Requires<[HasV4T]>;
+
+def : Pat <(i32 (load (add IntRegs:$src1, IntRegs:$src2))),
+           (L4_loadri_rr IntRegs:$src1, IntRegs:$src2, 0)>,
+            Requires<[HasV4T]>;
 }
 
 // zext i1->i64
@@ -1222,16 +1218,6 @@ let addrMode = BaseImmOffset, InputType = "imm", isCodeGenOnly = 0 in {
 }
 
 //===----------------------------------------------------------------------===//
-// Post increment loads with register offset.
-//===----------------------------------------------------------------------===//
-
-let hasNewValue = 1, isCodeGenOnly = 0 in
-def L2_loadbsw2_pr : T_load_pr <"membh", IntRegs, 0b0001, HalfWordAccess>;
-
-let isCodeGenOnly = 0 in
-def L2_loadbsw4_pr : T_load_pr <"membh", DoubleRegs, 0b0111, WordAccess>;
-
-//===----------------------------------------------------------------------===//
 // Template class for non-predicated post increment .new stores
 // mem[bhwd](Rx++#s4:[0123])=Nt.new
 //===----------------------------------------------------------------------===//
@@ -1601,7 +1587,7 @@ def J4_hintjumpr: JRInst <
 // PC-relative add
 let hasNewValue = 1, isExtendable = 1, opExtendable = 1,
     isExtentSigned = 0, opExtentBits = 6, hasSideEffects = 0,
-    Uses = [PC], validSubTargets = HasV4SubT, isCodeGenOnly = 0 in
+    Uses = [PC], validSubTargets = HasV4SubT in
 def C4_addipc : CRInst <(outs IntRegs:$Rd), (ins u6Ext:$u6),
   "$Rd = add(pc, #$u6)", [], "", CR_tc_2_SLOT3 > {
     bits<5> Rd;
@@ -1741,19 +1727,6 @@ let hasNewValue = 1, isCodeGenOnly = 0 in {
   def S4_extract    : T_S2op_extract <"extract",  0b1101, IntRegs, u5Imm>;
 }
 
-// Complex add/sub halfwords/words
-let Defs = [USR_OVF], isCodeGenOnly = 0 in {
-  def S4_vxaddsubh : T_S3op_64 < "vxaddsubh", 0b01, 0b100, 0, 1>;
-  def S4_vxaddsubw : T_S3op_64 < "vxaddsubw", 0b01, 0b000, 0, 1>;
-  def S4_vxsubaddh : T_S3op_64 < "vxsubaddh", 0b01, 0b110, 0, 1>;
-  def S4_vxsubaddw : T_S3op_64 < "vxsubaddw", 0b01, 0b010, 0, 1>;
-}
-
-let Defs = [USR_OVF], isCodeGenOnly = 0 in {
-  def S4_vxaddsubhr : T_S3op_64 < "vxaddsubh", 0b11, 0b000, 0, 1, 1, 1>;
-  def S4_vxsubaddhr : T_S3op_64 < "vxsubaddh", 0b11, 0b010, 0, 1, 1, 1>;
-}
-
 let Itinerary = M_tc_3x_SLOT23, Defs = [USR_OVF], isCodeGenOnly = 0 in {
   def M4_mac_up_s1_sat: T_MType_acc_rr<"+= mpy", 0b011, 0b000, 0, [], 0, 1, 1>;
   def M4_nac_up_s1_sat: T_MType_acc_rr<"-= mpy", 0b011, 0b001, 0, [], 0, 1, 1>;
@@ -1781,76 +1754,7 @@ def M4_xor_xacc
     let Inst{12-8}  = Rtt;
     let Inst{4-0}   = Rxx;
   }
-
-// Rotate and reduce bytes
-// Rdd=vrcrotate(Rss,Rt,#u2)
-let hasSideEffects = 0, isCodeGenOnly = 0 in
-def S4_vrcrotate
-  : SInst <(outs DoubleRegs:$Rdd),
-           (ins DoubleRegs:$Rss, IntRegs:$Rt, u2Imm:$u2),
-  "$Rdd = vrcrotate($Rss, $Rt, #$u2)",
-  [], "", S_3op_tc_3x_SLOT23> {
-    bits<5> Rdd;
-    bits<5> Rss;
-    bits<5> Rt;
-    bits<2> u2;
-
-    let IClass = 0b1100;
-
-    let Inst{27-22} = 0b001111;
-    let Inst{20-16} = Rss;
-    let Inst{13}    = u2{1};
-    let Inst{12-8}  = Rt;
-    let Inst{7-6}   = 0b11;
-    let Inst{5}     = u2{0};
-    let Inst{4-0}   = Rdd;
-  }
-
-// Rotate and reduce bytes with accumulation
-// Rxx+=vrcrotate(Rss,Rt,#u2)
-let hasSideEffects = 0, isCodeGenOnly = 0 in
-def S4_vrcrotate_acc
-  : SInst <(outs DoubleRegs:$Rxx),
-           (ins DoubleRegs:$dst2, DoubleRegs:$Rss, IntRegs:$Rt, u2Imm:$u2),
-  "$Rxx += vrcrotate($Rss, $Rt, #$u2)", [],
-  "$dst2 = $Rxx", S_3op_tc_3x_SLOT23> {
-    bits<5> Rxx;
-    bits<5> Rss;
-    bits<5> Rt;
-    bits<2> u2;
-
-    let IClass = 0b1100;
-
-    let Inst{27-21} = 0b1011101;
-    let Inst{20-16} = Rss;
-    let Inst{13}    = u2{1};
-    let Inst{12-8}  = Rt;
-    let Inst{5}     = u2{0};
-    let Inst{4-0}   = Rxx;
-  }
-
-
-// Vector reduce conditional negate halfwords
-let hasSideEffects = 0, isCodeGenOnly = 0 in
-def S2_vrcnegh
-  : SInst <(outs DoubleRegs:$Rxx),
-           (ins DoubleRegs:$dst2, DoubleRegs:$Rss, IntRegs:$Rt),
-  "$Rxx += vrcnegh($Rss, $Rt)", [],
-  "$dst2 = $Rxx", S_3op_tc_3x_SLOT23> {
-    bits<5> Rxx;
-    bits<5> Rss;
-    bits<5> Rt;
-
-    let IClass = 0b1100;
-
-    let Inst{27-21} = 0b1011001;
-    let Inst{20-16} = Rss;
-    let Inst{13}    = 0b1;
-    let Inst{12-8}  = Rt;
-    let Inst{7-5}   = 0b111;
-    let Inst{4-0}   = Rxx;
-  }
-
+  
 // Split bitfield
 let isCodeGenOnly = 0 in
 def A4_bitspliti : T_S2op_2_di <"bitsplit", 0b110, 0b100>;
@@ -2237,124 +2141,39 @@ def : Pat <(add (mul (i32 IntRegs:$src2), (i32 IntRegs:$src3)),
            (i32 (M4_mpyrr_addi tglobaladdr:$src1, IntRegs:$src2,
                                IntRegs:$src3))>;
 
+// Polynomial multiply words
+// Rdd=pmpyw(Rs,Rt)
+// Rxx^=pmpyw(Rs,Rt)
+
 // Vector reduce multiply word by signed half (32x16)
-//Rdd=vrmpyweh(Rss,Rtt)[:<<1]
-let isCodeGenOnly = 0 in {
-def M4_vrmpyeh_s0 : T_M2_vmpy<"vrmpyweh", 0b010, 0b100, 0, 0, 0>;
-def M4_vrmpyeh_s1 : T_M2_vmpy<"vrmpyweh", 0b110, 0b100, 1, 0, 0>;
-}
+// Rdd=vrmpyweh(Rss,Rtt)[:<<1]
+// Rdd=vrmpywoh(Rss,Rtt)[:<<1]
+// Rxx+=vrmpyweh(Rss,Rtt)[:<<1]
+// Rxx+=vrmpywoh(Rss,Rtt)[:<<1]
 
-//Rdd=vrmpywoh(Rss,Rtt)[:<<1]
-let isCodeGenOnly = 0 in {
-def M4_vrmpyoh_s0 : T_M2_vmpy<"vrmpywoh", 0b001, 0b010, 0, 0, 0>;
-def M4_vrmpyoh_s1 : T_M2_vmpy<"vrmpywoh", 0b101, 0b010, 1, 0, 0>;
-}
-//Rdd+=vrmpyweh(Rss,Rtt)[:<<1]
-let isCodeGenOnly = 0 in {
-def M4_vrmpyeh_acc_s0: T_M2_vmpy_acc<"vrmpyweh", 0b001, 0b110, 0, 0>;
-def M4_vrmpyeh_acc_s1: T_M2_vmpy_acc<"vrmpyweh", 0b101, 0b110, 1, 0>;
-}
+// Multiply and use upper result
+// Rd=mpy(Rs,Rt.H):<<1:sat
+// Rd=mpy(Rs,Rt.L):<<1:sat
+// Rd=mpy(Rs,Rt):<<1
+// Rd=mpy(Rs,Rt):<<1:sat
+// Rd=mpysu(Rs,Rt)
+// Rx+=mpy(Rs,Rt):<<1:sat
+// Rx-=mpy(Rs,Rt):<<1:sat
 
-//Rdd=vrmpywoh(Rss,Rtt)[:<<1]
-let isCodeGenOnly = 0 in {
-def M4_vrmpyoh_acc_s0: T_M2_vmpy_acc<"vrmpywoh", 0b011, 0b110, 0, 0>;
-def M4_vrmpyoh_acc_s1: T_M2_vmpy_acc<"vrmpywoh", 0b111, 0b110, 1, 0>;
-}
-
-// Vector multiply halfwords, signed by unsigned
-// Rdd=vmpyhsu(Rs,Rt)[:<<]:sat
-let isCodeGenOnly = 0 in {
-def M2_vmpy2su_s0 : T_XTYPE_mpy64 < "vmpyhsu", 0b000, 0b111, 1, 0, 0>;
-def M2_vmpy2su_s1 : T_XTYPE_mpy64 < "vmpyhsu", 0b100, 0b111, 1, 1, 0>;
-}
-
-// Rxx+=vmpyhsu(Rs,Rt)[:<<1]:sat
-let isCodeGenOnly = 0 in {
-def M2_vmac2su_s0 : T_XTYPE_mpy64_acc < "vmpyhsu", "+", 0b011, 0b101, 1, 0, 0>;
-def M2_vmac2su_s1 : T_XTYPE_mpy64_acc < "vmpyhsu", "+", 0b111, 0b101, 1, 1, 0>;
-}
+// Vector multiply bytes
+// Rdd=vmpybsu(Rs,Rt)
+// Rdd=vmpybu(Rs,Rt)
+// Rxx+=vmpybsu(Rs,Rt)
+// Rxx+=vmpybu(Rs,Rt)
 
 // Vector polynomial multiply halfwords
 // Rdd=vpmpyh(Rs,Rt)
-let isCodeGenOnly = 0 in
-def M4_vpmpyh : T_XTYPE_mpy64 < "vpmpyh", 0b110, 0b111, 0, 0, 0>;
-
 // Rxx^=vpmpyh(Rs,Rt)
-let isCodeGenOnly = 0 in
-def M4_vpmpyh_acc : T_XTYPE_mpy64_acc < "vpmpyh", "^", 0b101, 0b111, 0, 0, 0>;
-
-// Polynomial multiply words
-// Rdd=pmpyw(Rs,Rt)
-let isCodeGenOnly = 0 in
-def M4_pmpyw : T_XTYPE_mpy64 < "pmpyw", 0b010, 0b111, 0, 0, 0>;
-
-// Rxx^=pmpyw(Rs,Rt)
-let isCodeGenOnly = 0 in
-def M4_pmpyw_acc  : T_XTYPE_mpy64_acc < "pmpyw", "^", 0b001, 0b111, 0, 0, 0>;
 
 //===----------------------------------------------------------------------===//
 // XTYPE/MPY -
 //===----------------------------------------------------------------------===//
 
-
-//===----------------------------------------------------------------------===//
-// ALU64/Vector compare
-//===----------------------------------------------------------------------===//
-//===----------------------------------------------------------------------===//
-// Template class for vector compare
-//===----------------------------------------------------------------------===//
-
-let hasSideEffects = 0 in
-class T_vcmpImm <string Str, bits<2> cmpOp, bits<2> minOp, Operand ImmOprnd>
-  : ALU64_rr <(outs PredRegs:$Pd),
-              (ins DoubleRegs:$Rss, ImmOprnd:$Imm),
-  "$Pd = "#Str#"($Rss, #$Imm)",
-  [], "", ALU64_tc_2early_SLOT23> {
-    bits<2> Pd;
-    bits<5> Rss;
-    bits<32> Imm;
-    bits<8> ImmBits;
-    let ImmBits{6-0} = Imm{6-0};
-    let ImmBits{7} = !if (!eq(cmpOp,0b10), 0b0, Imm{7}); // 0 for vcmp[bhw].gtu
-
-    let IClass = 0b1101;
-
-    let Inst{27-24} = 0b1100;
-    let Inst{22-21} = cmpOp;
-    let Inst{20-16} = Rss;
-    let Inst{12-5} = ImmBits;
-    let Inst{4-3} = minOp;
-    let Inst{1-0} = Pd;
-  }
-
-// Vector compare bytes
-let isCodeGenOnly = 0 in
-def A4_vcmpbgt   : T_vcmp <"vcmpb.gt", 0b1010>;
-def: T_vcmp_pat<A4_vcmpbgt, setgt, v8i8>;
-
-let AsmString = "$Pd = any8(vcmpb.eq($Rss, $Rtt))" in
-let isCodeGenOnly = 0 in
-def A4_vcmpbeq_any : T_vcmp <"any8(vcmpb.gt", 0b1000>;
-
-let isCodeGenOnly = 0 in {
-def A4_vcmpbeqi  : T_vcmpImm <"vcmpb.eq",  0b00, 0b00, u8Imm>;
-def A4_vcmpbgti  : T_vcmpImm <"vcmpb.gt",  0b01, 0b00, s8Imm>;
-def A4_vcmpbgtui : T_vcmpImm <"vcmpb.gtu", 0b10, 0b00, u7Imm>;
-}
-
-// Vector compare halfwords
-let isCodeGenOnly = 0 in {
-def A4_vcmpheqi  : T_vcmpImm <"vcmph.eq",  0b00, 0b01, s8Imm>;
-def A4_vcmphgti  : T_vcmpImm <"vcmph.gt",  0b01, 0b01, s8Imm>;
-def A4_vcmphgtui : T_vcmpImm <"vcmph.gtu", 0b10, 0b01, u7Imm>;
-}
-
-// Vector compare words
-let isCodeGenOnly = 0 in {
-def A4_vcmpweqi  : T_vcmpImm <"vcmpw.eq",  0b00, 0b10, s8Imm>;
-def A4_vcmpwgti  : T_vcmpImm <"vcmpw.gt",  0b01, 0b10, s8Imm>;
-def A4_vcmpwgtui : T_vcmpImm <"vcmpw.gtu", 0b10, 0b10, u7Imm>;
-}
 
 //===----------------------------------------------------------------------===//
 // XTYPE/SHIFT +
@@ -2408,10 +2227,6 @@ defm S4_ori  : T_ShiftOperate<"or",  or,  0b01, ALU64_tc_1_SLOT23>;
 let isCodeGenOnly = 0 in
 defm S4_subi : T_ShiftOperate<"sub", sub, 0b11, ALU64_tc_1_SLOT23>;
 
-// Vector conditional negate
-// Rdd=vcnegh(Rss,Rt)
-let Defs = [USR_OVF], Itinerary = S_3op_tc_2_SLOT23, isCodeGenOnly = 0 in
-def S2_vcnegh   : T_S3op_shiftVect < "vcnegh",   0b11, 0b01>;
 
 // Rd=[cround|round](Rs,Rt)
 let hasNewValue = 1, Itinerary = S_3op_tc_2_SLOT23, isCodeGenOnly = 0 in {
@@ -2423,12 +2238,6 @@ let hasNewValue = 1, Itinerary = S_3op_tc_2_SLOT23, isCodeGenOnly = 0 in {
 let hasNewValue = 1, Defs = [USR_OVF], Itinerary = S_3op_tc_2_SLOT23,
     isCodeGenOnly = 0 in
 def A4_round_rr_sat : T_S3op_3 < "round", IntRegs, 0b11, 0b11, 1>;
-
-// Rd=[cmpyiwh|cmpyrwh](Rss,Rt):<<1:rnd:sat
-let Defs = [USR_OVF], Itinerary = S_3op_tc_3x_SLOT23, isCodeGenOnly = 0 in {
-  def M4_cmpyi_wh     : T_S3op_8<"cmpyiwh", 0b100, 1, 1, 1>;
-  def M4_cmpyr_wh     : T_S3op_8<"cmpyrwh", 0b110, 1, 1, 1>;
-}
 
 // Rdd=[add|sub](Rss,Rtt,Px):carry
 let isPredicateLate = 1, hasSideEffects = 0 in
@@ -2455,52 +2264,6 @@ class T_S3op_carry <string mnemonic, bits<3> MajOp>
 let isCodeGenOnly = 0 in {
 def A4_addp_c : T_S3op_carry < "add", 0b110 >;
 def A4_subp_c : T_S3op_carry < "sub", 0b111 >;
-}
-
-let Itinerary = S_3op_tc_3_SLOT23, hasSideEffects = 0 in
-class T_S3op_6 <string mnemonic, bits<3> MinOp, bit isUnsigned>
-  : SInst <(outs DoubleRegs:$Rxx),
-           (ins DoubleRegs:$dst2, DoubleRegs:$Rss, IntRegs:$Ru),
-  "$Rxx = "#mnemonic#"($Rss, $Ru)" ,
-  [] , "$dst2 = $Rxx"> {
-    bits<5> Rxx;
-    bits<5> Rss;
-    bits<5> Ru;
-
-    let IClass = 0b1100;
-
-    let Inst{27-21} = 0b1011001;
-    let Inst{20-16} = Rss;
-    let Inst{13}    = isUnsigned;
-    let Inst{12-8}  = Rxx;
-    let Inst{7-5}   = MinOp;
-    let Inst{4-0}   = Ru;
-  }
-
-// Vector reduce maximum halfwords
-// Rxx=vrmax[u]h(Rss,Ru)
-let isCodeGenOnly = 0 in {
-def A4_vrmaxh  : T_S3op_6 < "vrmaxh",  0b001, 0>;
-def A4_vrmaxuh : T_S3op_6 < "vrmaxuh", 0b001, 1>;
-}
-// Vector reduce maximum words
-// Rxx=vrmax[u]w(Rss,Ru)
-let isCodeGenOnly = 0 in {
-def A4_vrmaxw  : T_S3op_6 < "vrmaxw",  0b010, 0>;
-def A4_vrmaxuw : T_S3op_6 < "vrmaxuw", 0b010, 1>;
-}
-// Vector reduce minimum halfwords
-// Rxx=vrmin[u]h(Rss,Ru)
-let isCodeGenOnly = 0 in {
-def A4_vrminh  : T_S3op_6 < "vrminh",  0b101, 0>;
-def A4_vrminuh : T_S3op_6 < "vrminuh", 0b101, 1>;
-}
-
-// Vector reduce minimum words
-// Rxx=vrmin[u]w(Rss,Ru)
-let isCodeGenOnly = 0 in {
-def A4_vrminw  : T_S3op_6 < "vrminw",  0b110, 0>;
-def A4_vrminuw : T_S3op_6 < "vrminuw", 0b110, 1>;
 }
 
 // Shift an immediate left by register amount.
@@ -2913,30 +2676,123 @@ let Predicates = [HasV4T, UseMEMOP] in {
 // incorrect code for negative numbers.
 // Pd=cmpb.eq(Rs,#u8)
 
-// p=!cmp.eq(r1,#s10)
-let isCodeGenOnly = 0 in {
-def C4_cmpneqi  : T_CMP <"cmp.eq",  0b00, 1, s10Ext>;
-def C4_cmpltei  : T_CMP <"cmp.gt",  0b01, 1, s10Ext>;
-def C4_cmplteui : T_CMP <"cmp.gtu", 0b10, 1, u9Ext>;
+let isCompare = 1, isExtendable = 1, opExtendable = 2, hasSideEffects = 0,
+    validSubTargets = HasV4SubT in
+class CMP_NOT_REG_IMM<string OpName, bits<2> op, Operand ImmOp,
+                      list<dag> Pattern>
+  : ALU32Inst <(outs PredRegs:$dst), (ins IntRegs:$src1, ImmOp:$src2),
+    "$dst = !cmp."#OpName#"($src1, #$src2)",
+    Pattern,
+    "", ALU32_2op_tc_2early_SLOT0123> {
+    bits<2> dst;
+    bits<5> src1;
+    bits<10> src2;
+
+    let IClass = 0b0111;
+    let Inst{27-24} = 0b0101;
+    let Inst{23-22} = op;
+    let Inst{20-16} = src1;
+    let Inst{21} = !if (!eq(OpName, "gtu"), 0b0, src2{9});
+    let Inst{13-5} = src2{8-0};
+    let Inst{4-2} = 0b100;
+    let Inst{1-0} = dst;
 }
 
-def : T_CMP_pat <C4_cmpneqi,  setne,  s10ExtPred>;
-def : T_CMP_pat <C4_cmpltei,  setle,  s10ExtPred>;
-def : T_CMP_pat <C4_cmplteui, setule, u9ImmPred>;
+let opExtentBits = 10, isExtentSigned = 1 in {
+def C4_cmpneqi : CMP_NOT_REG_IMM <"eq", 0b00, s10Ext, [(set (i1 PredRegs:$dst),
+                 (setne (i32 IntRegs:$src1), s10ExtPred:$src2))]>;
 
-// rs <= rt -> !(rs > rt).
-/*
-def: Pat<(i1 (setle (i32 IntRegs:$src1), s10ExtPred:$src2)),
-         (C2_not (C2_cmpgti IntRegs:$src1, s10ExtPred:$src2))>;
-//         (C4_cmpltei IntRegs:$src1, s10ExtPred:$src2)>;
-*/
-// Map cmplt(Rs, Imm) -> !cmpgt(Rs, Imm-1).
-def: Pat<(i1 (setlt (i32 IntRegs:$src1), s8ExtPred:$src2)),
-         (C4_cmpltei IntRegs:$src1, (DEC_CONST_SIGNED s8ExtPred:$src2))>;
+def C4_cmpltei : CMP_NOT_REG_IMM <"gt", 0b01, s10Ext, [(set (i1 PredRegs:$dst),
+                 (not (setgt (i32 IntRegs:$src1), s10ExtPred:$src2)))]>;
 
-// rs != rt -> !(rs == rt).
-def: Pat<(i1 (setne (i32 IntRegs:$src1), s10ExtPred:$src2)),
-         (C4_cmpneqi IntRegs:$src1, s10ExtPred:$src2)>;
+}
+let opExtentBits = 9 in
+def C4_cmplteui : CMP_NOT_REG_IMM <"gtu", 0b10, u9Ext, [(set (i1 PredRegs:$dst),
+                  (not (setugt (i32 IntRegs:$src1), u9ExtPred:$src2)))]>;
+
+
+
+// p=!cmp.eq(r1,r2)
+let isCompare = 1, validSubTargets = HasV4SubT in
+def CMPnotEQ_rr : ALU32_rr<(outs PredRegs:$dst),
+                           (ins IntRegs:$src1, IntRegs:$src2),
+      "$dst = !cmp.eq($src1, $src2)",
+      [(set (i1 PredRegs:$dst),
+            (setne (i32 IntRegs:$src1), (i32 IntRegs:$src2)))]>,
+      Requires<[HasV4T]>;
+
+// p=!cmp.gt(r1,r2)
+let isCompare = 1, validSubTargets = HasV4SubT in
+def CMPnotGT_rr : ALU32_rr<(outs PredRegs:$dst),
+                           (ins IntRegs:$src1, IntRegs:$src2),
+      "$dst = !cmp.gt($src1, $src2)",
+      [(set (i1 PredRegs:$dst),
+            (not (setgt (i32 IntRegs:$src1), (i32 IntRegs:$src2))))]>,
+      Requires<[HasV4T]>;
+
+
+// p=!cmp.gtu(r1,r2)
+let isCompare = 1, validSubTargets = HasV4SubT in
+def CMPnotGTU_rr : ALU32_rr<(outs PredRegs:$dst),
+                            (ins IntRegs:$src1, IntRegs:$src2),
+      "$dst = !cmp.gtu($src1, $src2)",
+      [(set (i1 PredRegs:$dst),
+            (not (setugt (i32 IntRegs:$src1), (i32 IntRegs:$src2))))]>,
+      Requires<[HasV4T]>;
+
+let isCompare = 1, validSubTargets = HasV4SubT in
+def CMPbEQri_V4 : MInst<(outs PredRegs:$dst),
+            (ins IntRegs:$src1, u8Imm:$src2),
+            "$dst = cmpb.eq($src1, #$src2)",
+            [(set (i1 PredRegs:$dst),
+                  (seteq (and (i32 IntRegs:$src1), 255), u8ImmPred:$src2))]>,
+            Requires<[HasV4T]>;
+
+def : Pat <(brcond (i1 (setne (and (i32 IntRegs:$src1), 255), u8ImmPred:$src2)),
+                       bb:$offset),
+      (J2_jumpf (CMPbEQri_V4 (i32 IntRegs:$src1), u8ImmPred:$src2),
+                bb:$offset)>,
+      Requires<[HasV4T]>;
+
+// Pd=cmpb.eq(Rs,Rt)
+let isCompare = 1, validSubTargets = HasV4SubT in
+def CMPbEQrr_ubub_V4 : MInst<(outs PredRegs:$dst),
+            (ins IntRegs:$src1, IntRegs:$src2),
+            "$dst = cmpb.eq($src1, $src2)",
+            [(set (i1 PredRegs:$dst),
+                  (seteq (and (xor (i32 IntRegs:$src1),
+                                   (i32 IntRegs:$src2)), 255), 0))]>,
+            Requires<[HasV4T]>;
+
+// Pd=cmpb.eq(Rs,Rt)
+let isCompare = 1, validSubTargets = HasV4SubT in
+def CMPbEQrr_sbsb_V4 : MInst<(outs PredRegs:$dst),
+            (ins IntRegs:$src1, IntRegs:$src2),
+            "$dst = cmpb.eq($src1, $src2)",
+            [(set (i1 PredRegs:$dst),
+                  (seteq (shl (i32 IntRegs:$src1), (i32 24)),
+                         (shl (i32 IntRegs:$src2), (i32 24))))]>,
+            Requires<[HasV4T]>;
+
+// Pd=cmpb.gt(Rs,Rt)
+let isCompare = 1, validSubTargets = HasV4SubT in
+def CMPbGTrr_V4 : MInst<(outs PredRegs:$dst),
+            (ins IntRegs:$src1, IntRegs:$src2),
+            "$dst = cmpb.gt($src1, $src2)",
+            [(set (i1 PredRegs:$dst),
+                  (setgt (shl (i32 IntRegs:$src1), (i32 24)),
+                         (shl (i32 IntRegs:$src2), (i32 24))))]>,
+            Requires<[HasV4T]>;
+
+// Pd=cmpb.gtu(Rs,#u7)
+let isExtendable = 1, opExtendable = 2, isExtentSigned = 0, opExtentBits = 7,
+isCompare = 1, validSubTargets = HasV4SubT, CextOpcode = "CMPbGTU", InputType = "imm" in
+def CMPbGTUri_V4 : MInst<(outs PredRegs:$dst),
+            (ins IntRegs:$src1, u7Ext:$src2),
+            "$dst = cmpb.gtu($src1, #$src2)",
+            [(set (i1 PredRegs:$dst), (setugt (and (i32 IntRegs:$src1), 255),
+                                              u7ExtPred:$src2))]>,
+            Requires<[HasV4T]>, ImmRegRel;
 
 // SDNode for converting immediate C to C-1.
 def DEC_CONST_BYTE : SDNodeXForm<imm, [{
@@ -2953,7 +2809,7 @@ def DEC_CONST_BYTE : SDNodeXForm<imm, [{
 //   if (!Pd.new) Rd=#0
 def : Pat <(i32 (zext (i1 (seteq (i32 (and (i32 IntRegs:$Rs), 255)),
                                            u8ExtPred:$u8)))),
-           (i32 (TFR_condset_ii (i1 (A4_cmpbeqi (i32 IntRegs:$Rs),
+           (i32 (TFR_condset_ii (i1 (CMPbEQri_V4 (i32 IntRegs:$Rs),
                                                  (u8ExtPred:$u8))),
                                 1, 0))>,
            Requires<[HasV4T]>;
@@ -2966,7 +2822,7 @@ def : Pat <(i32 (zext (i1 (seteq (i32 (and (i32 IntRegs:$Rs), 255)),
 //   if (!Pd.new) Rd=#1
 def : Pat <(i32 (zext (i1 (setne (i32 (and (i32 IntRegs:$Rs), 255)),
                                            u8ExtPred:$u8)))),
-           (i32 (TFR_condset_ii (i1 (A4_cmpbeqi (i32 IntRegs:$Rs),
+           (i32 (TFR_condset_ii (i1 (CMPbEQri_V4 (i32 IntRegs:$Rs),
                                                  (u8ExtPred:$u8))),
                                 0, 1))>,
            Requires<[HasV4T]>;
@@ -2979,7 +2835,7 @@ def : Pat <(i32 (zext (i1 (setne (i32 (and (i32 IntRegs:$Rs), 255)),
 //   if (!Pd.new) Rd=#0
 def : Pat <(i32 (zext (i1 (seteq (i32 IntRegs:$Rt),
                                  (i32 (and (i32 IntRegs:$Rs), 255)))))),
-           (i32 (TFR_condset_ii (i1 (A4_cmpbeq (i32 IntRegs:$Rs),
+           (i32 (TFR_condset_ii (i1 (CMPbEQrr_ubub_V4 (i32 IntRegs:$Rs),
                                                       (i32 IntRegs:$Rt))),
                                 1, 0))>,
            Requires<[HasV4T]>;
@@ -2992,7 +2848,7 @@ def : Pat <(i32 (zext (i1 (seteq (i32 IntRegs:$Rt),
 //   if (!Pd.new) Rd=#1
 def : Pat <(i32 (zext (i1 (setne (i32 IntRegs:$Rt),
                                  (i32 (and (i32 IntRegs:$Rs), 255)))))),
-           (i32 (TFR_condset_ii (i1 (A4_cmpbeq (i32 IntRegs:$Rs),
+           (i32 (TFR_condset_ii (i1 (CMPbEQrr_ubub_V4 (i32 IntRegs:$Rs),
                                                       (i32 IntRegs:$Rt))),
                                 0, 1))>,
            Requires<[HasV4T]>;
@@ -3005,7 +2861,7 @@ def : Pat <(i32 (zext (i1 (setne (i32 IntRegs:$Rt),
 //   if (!Pd.new) Rd=#0
 def : Pat <(i32 (zext (i1 (setugt (i32 (and (i32 IntRegs:$Rs), 255)),
                                             u8ExtPred:$u8)))),
-           (i32 (TFR_condset_ii (i1 (A4_cmpbgtui (i32 IntRegs:$Rs),
+           (i32 (TFR_condset_ii (i1 (CMPbGTUri_V4 (i32 IntRegs:$Rs),
                                                   (u8ExtPred:$u8))),
                                 1, 0))>,
            Requires<[HasV4T]>;
@@ -3018,7 +2874,7 @@ def : Pat <(i32 (zext (i1 (setugt (i32 (and (i32 IntRegs:$Rs), 255)),
 //   if (!Pd.new) Rd=#0
 def : Pat <(i32 (zext (i1 (setugt (i32 (and (i32 IntRegs:$Rs), 254)),
                                             u8ExtPred:$u8)))),
-           (i32 (TFR_condset_ii (i1 (A4_cmpbgtui (i32 IntRegs:$Rs),
+           (i32 (TFR_condset_ii (i1 (CMPbGTUri_V4 (i32 IntRegs:$Rs),
                                                   (u8ExtPred:$u8))),
                                 1, 0))>,
            Requires<[HasV4T]>;
@@ -3139,10 +2995,128 @@ def : Pat <(i32 (zext (i1 (setle (i32 IntRegs:$Rs), (i32 IntRegs:$Rt))))),
 let AddedComplexity = 139 in
 def : Pat <(i32 (zext (i1 (setult (i32 (and (i32 IntRegs:$src1), 255)),
                                   u7StrictPosImmPred:$src2)))),
-  (i32 (C2_muxii (i1 (A4_cmpbgtui (i32 IntRegs:$src1),
+  (i32 (C2_muxii (i1 (CMPbGTUri_V4 (i32 IntRegs:$src1),
                                  (DEC_CONST_BYTE u7StrictPosImmPred:$src2))),
                    0, 1))>,
                    Requires<[HasV4T]>;
+
+// Pd=cmpb.gtu(Rs,Rt)
+let isCompare = 1, validSubTargets = HasV4SubT, CextOpcode = "CMPbGTU",
+InputType = "reg" in
+def CMPbGTUrr_V4 : MInst<(outs PredRegs:$dst),
+            (ins IntRegs:$src1, IntRegs:$src2),
+            "$dst = cmpb.gtu($src1, $src2)",
+            [(set (i1 PredRegs:$dst), (setugt (and (i32 IntRegs:$src1), 255),
+                                             (and (i32 IntRegs:$src2), 255)))]>,
+            Requires<[HasV4T]>, ImmRegRel;
+
+// Following instruction is not being extended as it results into the incorrect
+// code for negative numbers.
+
+// Signed half compare(.eq) ri.
+// Pd=cmph.eq(Rs,#s8)
+let isCompare = 1, validSubTargets = HasV4SubT in
+def CMPhEQri_V4 : MInst<(outs PredRegs:$dst),
+            (ins IntRegs:$src1, s8Imm:$src2),
+            "$dst = cmph.eq($src1, #$src2)",
+            [(set (i1 PredRegs:$dst), (seteq (and (i32 IntRegs:$src1), 65535),
+                                             s8ImmPred:$src2))]>,
+            Requires<[HasV4T]>;
+
+// Signed half compare(.eq) rr.
+// Case 1: xor + and, then compare:
+//   r0=xor(r0,r1)
+//   r0=and(r0,#0xffff)
+//   p0=cmp.eq(r0,#0)
+// Pd=cmph.eq(Rs,Rt)
+let isCompare = 1, validSubTargets = HasV4SubT in
+def CMPhEQrr_xor_V4 : MInst<(outs PredRegs:$dst),
+            (ins IntRegs:$src1, IntRegs:$src2),
+            "$dst = cmph.eq($src1, $src2)",
+            [(set (i1 PredRegs:$dst), (seteq (and (xor (i32 IntRegs:$src1),
+                                                       (i32 IntRegs:$src2)),
+                                                  65535), 0))]>,
+            Requires<[HasV4T]>;
+
+// Signed half compare(.eq) rr.
+// Case 2: shift left 16 bits then compare:
+//   r0=asl(r0,16)
+//   r1=asl(r1,16)
+//   p0=cmp.eq(r0,r1)
+// Pd=cmph.eq(Rs,Rt)
+let isCompare = 1, validSubTargets = HasV4SubT in
+def CMPhEQrr_shl_V4 : MInst<(outs PredRegs:$dst),
+            (ins IntRegs:$src1, IntRegs:$src2),
+            "$dst = cmph.eq($src1, $src2)",
+            [(set (i1 PredRegs:$dst),
+                  (seteq (shl (i32 IntRegs:$src1), (i32 16)),
+                         (shl (i32 IntRegs:$src2), (i32 16))))]>,
+            Requires<[HasV4T]>;
+
+/* Incorrect Pattern -- immediate should be right shifted before being
+used in the cmph.gt instruction.
+// Signed half compare(.gt) ri.
+// Pd=cmph.gt(Rs,#s8)
+
+let isExtendable = 1, opExtendable = 2, isExtentSigned = 1, opExtentBits = 8,
+isCompare = 1, validSubTargets = HasV4SubT in
+def CMPhGTri_V4 : MInst<(outs PredRegs:$dst),
+            (ins IntRegs:$src1, s8Ext:$src2),
+            "$dst = cmph.gt($src1, #$src2)",
+            [(set (i1 PredRegs:$dst),
+                  (setgt (shl (i32 IntRegs:$src1), (i32 16)),
+                         s8ExtPred:$src2))]>,
+            Requires<[HasV4T]>;
+*/
+
+// Signed half compare(.gt) rr.
+// Pd=cmph.gt(Rs,Rt)
+let isCompare = 1, validSubTargets = HasV4SubT in
+def CMPhGTrr_shl_V4 : MInst<(outs PredRegs:$dst),
+            (ins IntRegs:$src1, IntRegs:$src2),
+            "$dst = cmph.gt($src1, $src2)",
+            [(set (i1 PredRegs:$dst),
+                  (setgt (shl (i32 IntRegs:$src1), (i32 16)),
+                         (shl (i32 IntRegs:$src2), (i32 16))))]>,
+            Requires<[HasV4T]>;
+
+// Unsigned half compare rr (.gtu).
+// Pd=cmph.gtu(Rs,Rt)
+let isCompare = 1, validSubTargets = HasV4SubT, CextOpcode = "CMPhGTU",
+InputType = "reg" in
+def CMPhGTUrr_V4 : MInst<(outs PredRegs:$dst),
+            (ins IntRegs:$src1, IntRegs:$src2),
+            "$dst = cmph.gtu($src1, $src2)",
+            [(set (i1 PredRegs:$dst),
+                  (setugt (and (i32 IntRegs:$src1), 65535),
+                          (and (i32 IntRegs:$src2), 65535)))]>,
+            Requires<[HasV4T]>, ImmRegRel;
+
+// Unsigned half compare ri (.gtu).
+// Pd=cmph.gtu(Rs,#u7)
+let isExtendable = 1, opExtendable = 2, isExtentSigned = 0, opExtentBits = 7,
+isCompare = 1, validSubTargets = HasV4SubT, CextOpcode = "CMPhGTU",
+InputType = "imm" in
+def CMPhGTUri_V4 : MInst<(outs PredRegs:$dst),
+            (ins IntRegs:$src1, u7Ext:$src2),
+            "$dst = cmph.gtu($src1, #$src2)",
+            [(set (i1 PredRegs:$dst), (setugt (and (i32 IntRegs:$src1), 65535),
+                                              u7ExtPred:$src2))]>,
+            Requires<[HasV4T]>, ImmRegRel;
+
+let validSubTargets = HasV4SubT in
+def NTSTBIT_rr : SInst<(outs PredRegs:$dst), (ins IntRegs:$src1, IntRegs:$src2),
+    "$dst = !tstbit($src1, $src2)",
+    [(set (i1 PredRegs:$dst),
+          (seteq (and (shl 1, (i32 IntRegs:$src2)), (i32 IntRegs:$src1)), 0))]>,
+    Requires<[HasV4T]>;
+
+let validSubTargets = HasV4SubT in
+def NTSTBIT_ri : SInst<(outs PredRegs:$dst), (ins IntRegs:$src1, u5Imm:$src2),
+    "$dst = !tstbit($src1, $src2)",
+    [(set (i1 PredRegs:$dst),
+          (seteq (and (shl 1, u5ImmPred:$src2), (i32 IntRegs:$src1)), 0))]>,
+    Requires<[HasV4T]>;
 
 //===----------------------------------------------------------------------===//
 // XTYPE/PRED -
@@ -3945,11 +3919,11 @@ def STriw_offset_ext_V4 : STInst<(outs),
             Requires<[HasV4T]>;
 
 def : Pat<(i64 (ctlz (i64 DoubleRegs:$src1))),
-          (i64 (A4_combineir (i32 0), (i32 (S2_cl0p DoubleRegs:$src1))))>,
+          (i64 (A4_combineir (i32 0), (i32 (CTLZ64_rr DoubleRegs:$src1))))>,
           Requires<[HasV4T]>;
 
 def : Pat<(i64 (cttz (i64 DoubleRegs:$src1))),
-          (i64 (A4_combineir (i32 0), (i32 (S2_ct0p DoubleRegs:$src1))))>,
+          (i64 (A4_combineir (i32 0), (i32 (CTTZ64_rr DoubleRegs:$src1))))>,
           Requires<[HasV4T]>;
 
 

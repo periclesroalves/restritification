@@ -38,8 +38,7 @@ static void exitWithError(const Twine &Message, StringRef Whence = "") {
 
 enum ProfileKinds { instr, sample };
 
-void mergeInstrProfile(const cl::list<std::string> &Inputs,
-                       StringRef OutputFilename) {
+void mergeInstrProfile(cl::list<std::string> Inputs, StringRef OutputFilename) {
   if (OutputFilename.compare("-") == 0)
     exitWithError("Cannot write indexed profdata format to stdout.");
 
@@ -65,8 +64,7 @@ void mergeInstrProfile(const cl::list<std::string> &Inputs,
   Writer.write(Output);
 }
 
-void mergeSampleProfile(const cl::list<std::string> &Inputs,
-                        StringRef OutputFilename,
+void mergeSampleProfile(cl::list<std::string> Inputs, StringRef OutputFilename,
                         sampleprof::SampleProfileFormat OutputFormat) {
   using namespace sampleprof;
   auto WriterOrErr = SampleProfileWriter::create(OutputFilename, OutputFormat);

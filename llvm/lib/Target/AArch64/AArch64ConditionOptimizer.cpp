@@ -304,7 +304,7 @@ bool AArch64ConditionOptimizer::adjustTo(MachineInstr *CmpMI,
 bool AArch64ConditionOptimizer::runOnMachineFunction(MachineFunction &MF) {
   DEBUG(dbgs() << "********** AArch64 Conditional Compares **********\n"
                << "********** Function: " << MF.getName() << '\n');
-  TII = MF.getSubtarget().getInstrInfo();
+  TII = MF.getTarget().getSubtargetImpl()->getInstrInfo();
   DomTree = &getAnalysis<MachineDominatorTree>();
 
   bool Changed = false;

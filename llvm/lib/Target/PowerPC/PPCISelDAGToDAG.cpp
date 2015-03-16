@@ -59,20 +59,22 @@ namespace {
   ///
   class PPCDAGToDAGISel : public SelectionDAGISel {
     const PPCTargetMachine &TM;
-    const PPCSubtarget *PPCSubTarget;
     const PPCTargetLowering *PPCLowering;
+    const PPCSubtarget *PPCSubTarget;
     unsigned GlobalBaseReg;
   public:
     explicit PPCDAGToDAGISel(PPCTargetMachine &tm)
-        : SelectionDAGISel(tm), TM(tm) {
+        : SelectionDAGISel(tm), TM(tm),
+          PPCLowering(TM.getSubtargetImpl()->getTargetLowering()),
+          PPCSubTarget(TM.getSubtargetImpl()) {
       initializePPCDAGToDAGISelPass(*PassRegistry::getPassRegistry());
     }
 
     bool runOnMachineFunction(MachineFunction &MF) override {
       // Make sure we re-emit a set of the global base reg if necessary
       GlobalBaseReg = 0;
-      PPCSubTarget = &MF.getSubtarget<PPCSubtarget>();
-      PPCLowering = PPCSubTarget->getTargetLowering();
+      PPCLowering = TM.getSubtargetImpl()->getTargetLowering();
+      PPCSubTarget = TM.getSubtargetImpl();
       SelectionDAGISel::runOnMachineFunction(MF);
 
       if (!PPCSubTarget->isSVR4ABI())
@@ -186,7 +188,7 @@ namespace {
                                       std::vector<SDValue> &OutOps) override {
       // We need to make sure that this one operand does not end up in r0
       // (because we might end up lowering this as 0(%op)).
-      const TargetRegisterInfo *TRI = PPCSubTarget->getRegisterInfo();
+      const TargetRegisterInfo *TRI = TM.getSubtargetImpl()->getRegisterInfo();
       const TargetRegisterClass *TRC = TRI->getPointerRegClass(*MF, /*Kind=*/1);
       SDValue RC = CurDAG->getTargetConstant(TRC->getID(), MVT::i32);
       SDValue NewOp =
@@ -256,7 +258,7 @@ void PPCDAGToDAGISel::InsertVRSaveCode(MachineFunction &Fn) {
   unsigned InVRSAVE = RegInfo->createVirtualRegister(&PPC::GPRCRegClass);
   unsigned UpdatedVRSAVE = RegInfo->createVirtualRegister(&PPC::GPRCRegClass);
 
-  const TargetInstrInfo &TII = *PPCSubTarget->getInstrInfo();
+  const TargetInstrInfo &TII = *TM.getSubtargetImpl()->getInstrInfo();
   MachineBasicBlock &EntryBB = *Fn.begin();
   DebugLoc dl;
   // Emit the following code into the entry block:
@@ -292,7 +294,7 @@ void PPCDAGToDAGISel::InsertVRSaveCode(MachineFunction &Fn) {
 ///
 SDNode *PPCDAGToDAGISel::getGlobalBaseReg() {
   if (!GlobalBaseReg) {
-    const TargetInstrInfo &TII = *PPCSubTarget->getInstrInfo();
+    const TargetInstrInfo &TII = *TM.getSubtargetImpl()->getInstrInfo();
     // Insert the set of GlobalBaseReg into the first MBB of the function
     MachineBasicBlock &FirstMBB = MF->front();
     MachineBasicBlock::iterator MBBI = FirstMBB.begin();

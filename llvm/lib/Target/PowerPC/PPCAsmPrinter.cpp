@@ -72,11 +72,9 @@ namespace {
     uint64_t TOCLabelID;
     StackMaps SM;
   public:
-    explicit PPCAsmPrinter(TargetMachine &TM,
-                           std::unique_ptr<MCStreamer> Streamer)
-        : AsmPrinter(TM, std::move(Streamer)),
-          Subtarget(TM.getSubtarget<PPCSubtarget>()), TOCLabelID(0), SM(*this) {
-    }
+    explicit PPCAsmPrinter(TargetMachine &TM, MCStreamer &Streamer)
+      : AsmPrinter(TM, Streamer),
+        Subtarget(TM.getSubtarget<PPCSubtarget>()), TOCLabelID(0), SM(*this) {}
 
     const char *getPassName() const override {
       return "PowerPC Assembly Printer";
@@ -106,9 +104,8 @@ namespace {
   /// PPCLinuxAsmPrinter - PowerPC assembly printer, customized for Linux
   class PPCLinuxAsmPrinter : public PPCAsmPrinter {
   public:
-    explicit PPCLinuxAsmPrinter(TargetMachine &TM,
-                                std::unique_ptr<MCStreamer> Streamer)
-        : PPCAsmPrinter(TM, std::move(Streamer)) {}
+    explicit PPCLinuxAsmPrinter(TargetMachine &TM, MCStreamer &Streamer)
+      : PPCAsmPrinter(TM, Streamer) {}
 
     const char *getPassName() const override {
       return "Linux PPC Assembly Printer";
@@ -127,9 +124,8 @@ namespace {
   /// OS X
   class PPCDarwinAsmPrinter : public PPCAsmPrinter {
   public:
-    explicit PPCDarwinAsmPrinter(TargetMachine &TM,
-                                 std::unique_ptr<MCStreamer> Streamer)
-        : PPCAsmPrinter(TM, std::move(Streamer)) {}
+    explicit PPCDarwinAsmPrinter(TargetMachine &TM, MCStreamer &Streamer)
+      : PPCAsmPrinter(TM, Streamer) {}
 
     const char *getPassName() const override {
       return "Darwin PPC Assembly Printer";
@@ -160,7 +156,7 @@ static const char *stripRegisterPrefix(const char *RegName) {
 
 void PPCAsmPrinter::printOperand(const MachineInstr *MI, unsigned OpNo,
                                  raw_ostream &O) {
-  const DataLayout *DL = TM.getDataLayout();
+  const DataLayout *DL = TM.getSubtargetImpl()->getDataLayout();
   const MachineOperand &MO = MI->getOperand(OpNo);
   
   switch (MO.getType()) {
@@ -315,7 +311,7 @@ bool PPCAsmPrinter::PrintAsmMemoryOperand(const MachineInstr *MI, unsigned OpNo,
 /// exists for it.  If not, create one.  Then return a symbol that references
 /// the TOC entry.
 MCSymbol *PPCAsmPrinter::lookUpOrCreateTOCEntry(MCSymbol *Sym) {
-  const DataLayout *DL = TM.getDataLayout();
+  const DataLayout *DL = TM.getSubtargetImpl()->getDataLayout();
   MCSymbol *&TOCEntry = TOC[Sym];
 
   // To avoid name clash check if the name already exists.
@@ -703,7 +699,7 @@ void PPCAsmPrinter::EmitInstruction(const MachineInstr *MI) {
                               OutContext);
     EmitToStreamer(OutStreamer, MCInstBuilder(PPC::ADDIS8)
                                 .addReg(MI->getOperand(0).getReg())
-                                .addReg(MI->getOperand(1).getReg())
+                                .addReg(PPC::X2)
                                 .addExpr(SymGotTprel));
     return;
   }
@@ -782,7 +778,7 @@ void PPCAsmPrinter::EmitInstruction(const MachineInstr *MI) {
                               OutContext);
     EmitToStreamer(OutStreamer, MCInstBuilder(PPC::ADDIS8)
                                 .addReg(MI->getOperand(0).getReg())
-                                .addReg(MI->getOperand(1).getReg())
+                                .addReg(PPC::X2)
                                 .addExpr(SymGotTlsGD));
     return;
   }
@@ -819,7 +815,7 @@ void PPCAsmPrinter::EmitInstruction(const MachineInstr *MI) {
                               OutContext);
     EmitToStreamer(OutStreamer, MCInstBuilder(PPC::ADDIS8)
                                 .addReg(MI->getOperand(0).getReg())
-                                .addReg(MI->getOperand(1).getReg())
+                                .addReg(PPC::X2)
                                 .addExpr(SymGotTlsLD));
     return;
   }
@@ -953,8 +949,9 @@ void PPCLinuxAsmPrinter::EmitStartOfAsmFile(Module &M) {
   if (M.getPICLevel() == PICLevel::Small)
     return AsmPrinter::EmitStartOfAsmFile(M);
 
-  OutStreamer.SwitchSection(OutContext.getELFSection(
-      ".got2", ELF::SHT_PROGBITS, ELF::SHF_WRITE | ELF::SHF_ALLOC));
+  OutStreamer.SwitchSection(OutContext.getELFSection(".got2",
+         ELF::SHT_PROGBITS, ELF::SHF_WRITE | ELF::SHF_ALLOC,
+         SectionKind::getReadOnly()));
 
   MCSymbol *TOCSym = OutContext.GetOrCreateSymbol(Twine(".LTOC"));
   MCSymbol *CurrentPos = OutContext.CreateTempSymbol();
@@ -1006,8 +1003,9 @@ void PPCLinuxAsmPrinter::EmitFunctionEntryLabel() {
 
   // Emit an official procedure descriptor.
   MCSectionSubPair Current = OutStreamer.getCurrentSection();
-  const MCSectionELF *Section = OutStreamer.getContext().getELFSection(
-      ".opd", ELF::SHT_PROGBITS, ELF::SHF_WRITE | ELF::SHF_ALLOC);
+  const MCSectionELF *Section = OutStreamer.getContext().getELFSection(".opd",
+      ELF::SHT_PROGBITS, ELF::SHF_WRITE | ELF::SHF_ALLOC,
+      SectionKind::getReadOnly());
   OutStreamer.SwitchSection(Section);
   OutStreamer.EmitLabel(CurrentFnSym);
   OutStreamer.EmitValueToAlignment(8);
@@ -1034,7 +1032,7 @@ void PPCLinuxAsmPrinter::EmitFunctionEntryLabel() {
 
 
 bool PPCLinuxAsmPrinter::doFinalization(Module &M) {
-  const DataLayout *TD = TM.getDataLayout();
+  const DataLayout *TD = TM.getSubtargetImpl()->getDataLayout();
 
   bool isPPC64 = TD->getPointerSizeInBits() == 64;
 
@@ -1045,11 +1043,13 @@ bool PPCLinuxAsmPrinter::doFinalization(Module &M) {
     const MCSectionELF *Section;
     
     if (isPPC64)
-      Section = OutStreamer.getContext().getELFSection(
-          ".toc", ELF::SHT_PROGBITS, ELF::SHF_WRITE | ELF::SHF_ALLOC);
-        else
-          Section = OutStreamer.getContext().getELFSection(
-              ".got2", ELF::SHT_PROGBITS, ELF::SHF_WRITE | ELF::SHF_ALLOC);
+      Section = OutStreamer.getContext().getELFSection(".toc",
+        ELF::SHT_PROGBITS, ELF::SHF_WRITE | ELF::SHF_ALLOC,
+        SectionKind::getReadOnly());
+	else
+      Section = OutStreamer.getContext().getELFSection(".got2",
+        ELF::SHT_PROGBITS, ELF::SHF_WRITE | ELF::SHF_ALLOC,
+        SectionKind::getReadOnly());
     OutStreamer.SwitchSection(Section);
 
     for (MapVector<MCSymbol*, MCSymbol*>::iterator I = TOC.begin(),
@@ -1238,7 +1238,8 @@ static MCSymbol *GetAnonSym(MCSymbol *Sym, MCContext &Ctx) {
 
 void PPCDarwinAsmPrinter::
 EmitFunctionStubs(const MachineModuleInfoMachO::SymbolListTy &Stubs) {
-  bool isPPC64 = TM.getDataLayout()->getPointerSizeInBits() == 64;
+  bool isPPC64 =
+      TM.getSubtargetImpl()->getDataLayout()->getPointerSizeInBits() == 64;
   bool isDarwin = Subtarget.isDarwin();
   
   const TargetLoweringObjectFileMachO &TLOFMacho = 
@@ -1374,7 +1375,8 @@ EmitFunctionStubs(const MachineModuleInfoMachO::SymbolListTy &Stubs) {
 
 
 bool PPCDarwinAsmPrinter::doFinalization(Module &M) {
-  bool isPPC64 = TM.getDataLayout()->getPointerSizeInBits() == 64;
+  bool isPPC64 =
+      TM.getSubtargetImpl()->getDataLayout()->getPointerSizeInBits() == 64;
 
   // Darwin/PPC always uses mach-o.
   const TargetLoweringObjectFileMachO &TLOFMacho = 
@@ -1469,14 +1471,13 @@ bool PPCDarwinAsmPrinter::doFinalization(Module &M) {
 /// for a MachineFunction to the given output stream, in a format that the
 /// Darwin assembler can deal with.
 ///
-static AsmPrinter *
-createPPCAsmPrinterPass(TargetMachine &tm,
-                        std::unique_ptr<MCStreamer> &&Streamer) {
+static AsmPrinter *createPPCAsmPrinterPass(TargetMachine &tm,
+                                           MCStreamer &Streamer) {
   const PPCSubtarget *Subtarget = &tm.getSubtarget<PPCSubtarget>();
 
   if (Subtarget->isDarwin())
-    return new PPCDarwinAsmPrinter(tm, std::move(Streamer));
-  return new PPCLinuxAsmPrinter(tm, std::move(Streamer));
+    return new PPCDarwinAsmPrinter(tm, Streamer);
+  return new PPCLinuxAsmPrinter(tm, Streamer);
 }
 
 // Force static initialization.

@@ -43,6 +43,7 @@ protected:
 
 private:
   Triple TargetTriple;
+  const DataLayout DL;
   SystemZInstrInfo InstrInfo;
   SystemZTargetLowering TLInfo;
   SystemZSelectionDAGInfo TSInfo;
@@ -58,6 +59,7 @@ public:
     return &FrameLowering;
   }
   const SystemZInstrInfo *getInstrInfo() const override { return &InstrInfo; }
+  const DataLayout *getDataLayout() const override { return &DL; }
   const SystemZRegisterInfo *getRegisterInfo() const override {
     return &InstrInfo.getRegisterInfo();
   }

@@ -259,12 +259,6 @@ def u16_s8ImmPred  : PatLeaf<(i32 imm), [{
   return isShiftedUInt<16,8>(v);
 }]>;
 
-def u16_0ImmPred  : PatLeaf<(i32 imm), [{
-  // True if the immediate fits in a 16-bit unsigned field.
-  int64_t v = (int64_t)N->getSExtValue();
-  return isUInt<16>(v);
-}]>;
-
 def u11_3ImmPred : PatLeaf<(i32 imm), [{
   // True if the immediate fits in a 14-bit unsigned field, and the lowest
   // three bits are 0.
@@ -343,12 +337,6 @@ def u5ImmPred  : PatLeaf<(i32 imm), [{
   return isUInt<5>(v);
 }]>;
 
-def u4ImmPred  : PatLeaf<(i32 imm), [{
-  // u4ImmPred predicate - True if the immediate fits in a 4-bit unsigned
-  // field.
-  int64_t v = (int64_t)N->getSExtValue();
-  return isUInt<4>(v);
-}]>;
 
 def u3ImmPred  : PatLeaf<(i32 imm), [{
   // u3ImmPred predicate - True if the immediate fits in a 3-bit unsigned
@@ -517,7 +505,7 @@ def u0AlwaysExt : Operand<i32>;
 // Predicates for constant extendable operands
 def s16ExtPred  : PatLeaf<(i32 imm), [{
   int64_t v = (int64_t)N->getSExtValue();
-  if (!Subtarget->hasV4TOps())
+  if (!Subtarget.hasV4TOps())
     // Return true if the immediate can fit in a 16-bit sign extended field.
     return isInt<16>(v);
   else {
@@ -532,7 +520,7 @@ def s16ExtPred  : PatLeaf<(i32 imm), [{
 
 def s10ExtPred  : PatLeaf<(i32 imm), [{
   int64_t v = (int64_t)N->getSExtValue();
-  if (!Subtarget->hasV4TOps())
+  if (!Subtarget.hasV4TOps())
     // Return true if the immediate can fit in a 10-bit sign extended field.
     return isInt<10>(v);
   else {
@@ -547,7 +535,7 @@ def s10ExtPred  : PatLeaf<(i32 imm), [{
 
 def s9ExtPred  : PatLeaf<(i32 imm), [{
   int64_t v = (int64_t)N->getSExtValue();
-  if (!Subtarget->hasV4TOps())
+  if (!Subtarget.hasV4TOps())
     // Return true if the immediate can fit in a 9-bit sign extended field.
     return isInt<9>(v);
   else {
@@ -562,7 +550,7 @@ def s9ExtPred  : PatLeaf<(i32 imm), [{
 
 def s8ExtPred  : PatLeaf<(i32 imm), [{
   int64_t v = (int64_t)N->getSExtValue();
-  if (!Subtarget->hasV4TOps())
+  if (!Subtarget.hasV4TOps())
     // Return true if the immediate can fit in a 8-bit sign extended field.
     return isInt<8>(v);
   else {
@@ -577,7 +565,7 @@ def s8ExtPred  : PatLeaf<(i32 imm), [{
 
 def s8_16ExtPred  : PatLeaf<(i32 imm), [{
   int64_t v = (int64_t)N->getSExtValue();
-  if (!Subtarget->hasV4TOps())
+  if (!Subtarget.hasV4TOps())
     // Return true if the immediate fits in a 8-bit sign extended field.
     return isInt<8>(v);
   else {
@@ -593,7 +581,7 @@ def s8_16ExtPred  : PatLeaf<(i32 imm), [{
 
 def s6ExtPred  : PatLeaf<(i32 imm), [{
   int64_t v = (int64_t)N->getSExtValue();
-  if (!Subtarget->hasV4TOps())
+  if (!Subtarget.hasV4TOps())
     // Return true if the immediate can fit in a 6-bit sign extended field.
     return isInt<6>(v);
   else {
@@ -608,7 +596,7 @@ def s6ExtPred  : PatLeaf<(i32 imm), [{
 
 def s6_16ExtPred  : PatLeaf<(i32 imm), [{
   int64_t v = (int64_t)N->getSExtValue();
-  if (!Subtarget->hasV4TOps())
+  if (!Subtarget.hasV4TOps())
     // Return true if the immediate fits in a 6-bit sign extended field.
     return isInt<6>(v);
   else {
@@ -624,7 +612,7 @@ def s6_16ExtPred  : PatLeaf<(i32 imm), [{
 
 def s6_10ExtPred  : PatLeaf<(i32 imm), [{
   int64_t v = (int64_t)N->getSExtValue();
-  if (!Subtarget->hasV4TOps())
+  if (!Subtarget.hasV4TOps())
     // Return true if the immediate can fit in a 6-bit sign extended field.
     return isInt<6>(v);
   else {
@@ -640,7 +628,7 @@ def s6_10ExtPred  : PatLeaf<(i32 imm), [{
 
 def s11_0ExtPred  : PatLeaf<(i32 imm), [{
   int64_t v = (int64_t)N->getSExtValue();
-  if (!Subtarget->hasV4TOps())
+  if (!Subtarget.hasV4TOps())
     // Return true if the immediate can fit in a 11-bit sign extended field.
     return isShiftedInt<11,0>(v);
   else {
@@ -655,7 +643,7 @@ def s11_0ExtPred  : PatLeaf<(i32 imm), [{
 
 def s11_1ExtPred  : PatLeaf<(i32 imm), [{
   int64_t v = (int64_t)N->getSExtValue();
-  if (!Subtarget->hasV4TOps())
+  if (!Subtarget.hasV4TOps())
     // Return true if the immediate can fit in a 12-bit sign extended field and
     // is 2 byte aligned.
     return isShiftedInt<11,1>(v);
@@ -671,7 +659,7 @@ def s11_1ExtPred  : PatLeaf<(i32 imm), [{
 
 def s11_2ExtPred  : PatLeaf<(i32 imm), [{
   int64_t v = (int64_t)N->getSExtValue();
-  if (!Subtarget->hasV4TOps())
+  if (!Subtarget.hasV4TOps())
     // Return true if the immediate can fit in a 13-bit sign extended field and
     // is 4-byte aligned.
     return isShiftedInt<11,2>(v);
@@ -687,7 +675,7 @@ def s11_2ExtPred  : PatLeaf<(i32 imm), [{
 
 def s11_3ExtPred  : PatLeaf<(i32 imm), [{
   int64_t v = (int64_t)N->getSExtValue();
-  if (!Subtarget->hasV4TOps())
+  if (!Subtarget.hasV4TOps())
     // Return true if the immediate can fit in a 14-bit sign extended field and
     // is 8-byte aligned.
     return isShiftedInt<11,3>(v);
@@ -703,7 +691,7 @@ def s11_3ExtPred  : PatLeaf<(i32 imm), [{
 
 def u0AlwaysExtPred : PatLeaf<(i32 imm), [{
   // Predicate for an unsigned 32-bit value that always needs to be extended.
-  if (Subtarget->hasV4TOps()) {
+  if (Subtarget.hasV4TOps()) {
     if (isConstExtProfitable(Node)) {
       int64_t v = (int64_t)N->getSExtValue();
       return isUInt<32>(v);
@@ -714,7 +702,7 @@ def u0AlwaysExtPred : PatLeaf<(i32 imm), [{
 
 def u6ExtPred  : PatLeaf<(i32 imm), [{
   int64_t v = (int64_t)N->getSExtValue();
-  if (!Subtarget->hasV4TOps())
+  if (!Subtarget.hasV4TOps())
     // Return true if the immediate can fit in a 6-bit unsigned field.
     return isUInt<6>(v);
   else {
@@ -729,7 +717,7 @@ def u6ExtPred  : PatLeaf<(i32 imm), [{
 
 def u7ExtPred  : PatLeaf<(i32 imm), [{
   int64_t v = (int64_t)N->getSExtValue();
-  if (!Subtarget->hasV4TOps())
+  if (!Subtarget.hasV4TOps())
     // Return true if the immediate can fit in a 7-bit unsigned field.
     return isUInt<7>(v);
   else {
@@ -744,7 +732,7 @@ def u7ExtPred  : PatLeaf<(i32 imm), [{
 
 def u8ExtPred  : PatLeaf<(i32 imm), [{
   int64_t v = (int64_t)N->getSExtValue();
-  if (!Subtarget->hasV4TOps())
+  if (!Subtarget.hasV4TOps())
     // Return true if the immediate can fit in a 8-bit unsigned field.
     return isUInt<8>(v);
   else {
@@ -759,7 +747,7 @@ def u8ExtPred  : PatLeaf<(i32 imm), [{
 
 def u9ExtPred  : PatLeaf<(i32 imm), [{
   int64_t v = (int64_t)N->getSExtValue();
-  if (!Subtarget->hasV4TOps())
+  if (!Subtarget.hasV4TOps())
     // Return true if the immediate can fit in a 9-bit unsigned field.
     return isUInt<9>(v);
   else {
@@ -774,7 +762,7 @@ def u9ExtPred  : PatLeaf<(i32 imm), [{
 
 def u6_1ExtPred  : PatLeaf<(i32 imm), [{
   int64_t v = (int64_t)N->getSExtValue();
-  if (!Subtarget->hasV4TOps())
+  if (!Subtarget.hasV4TOps())
     // Return true if the immediate can fit in a 7-bit unsigned field and
     // is 2-byte aligned.
     return isShiftedUInt<6,1>(v);
@@ -790,7 +778,7 @@ def u6_1ExtPred  : PatLeaf<(i32 imm), [{
 
 def u6_2ExtPred  : PatLeaf<(i32 imm), [{
   int64_t v = (int64_t)N->getSExtValue();
-  if (!Subtarget->hasV4TOps())
+  if (!Subtarget.hasV4TOps())
     // Return true if the immediate can fit in a 8-bit unsigned field and
     // is 4-byte aligned.
     return isShiftedUInt<6,2>(v);
@@ -806,7 +794,7 @@ def u6_2ExtPred  : PatLeaf<(i32 imm), [{
 
 def u6_3ExtPred  : PatLeaf<(i32 imm), [{
   int64_t v = (int64_t)N->getSExtValue();
-  if (!Subtarget->hasV4TOps())
+  if (!Subtarget.hasV4TOps())
     // Return true if the immediate can fit in a 9-bit unsigned field and
     // is 8-byte aligned.
     return isShiftedUInt<6,3>(v);

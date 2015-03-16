@@ -45,7 +45,7 @@
 #include "llvm/Support/Allocator.h"
 #include "llvm/Support/CommandLine.h"
 #include "llvm/Support/Debug.h"
-#include "llvm/Analysis/TargetLibraryInfo.h"
+#include "llvm/Target/TargetLibraryInfo.h"
 #include "llvm/Transforms/Utils/BasicBlockUtils.h"
 #include "llvm/Transforms/Utils/Local.h"
 #include "llvm/Transforms/Utils/SSAUpdater.h"
@@ -685,7 +685,7 @@ namespace {
     void getAnalysisUsage(AnalysisUsage &AU) const override {
       AU.addRequired<AssumptionCacheTracker>();
       AU.addRequired<DominatorTreeWrapperPass>();
-      AU.addRequired<TargetLibraryInfoWrapperPass>();
+      AU.addRequired<TargetLibraryInfo>();
       if (!NoLoads)
         AU.addRequired<MemoryDependenceAnalysis>();
       AU.addRequired<AliasAnalysis>();
@@ -736,7 +736,7 @@ INITIALIZE_PASS_BEGIN(GVN, "gvn", "Global Value Numbering", false, false)
 INITIALIZE_PASS_DEPENDENCY(AssumptionCacheTracker)
 INITIALIZE_PASS_DEPENDENCY(MemoryDependenceAnalysis)
 INITIALIZE_PASS_DEPENDENCY(DominatorTreeWrapperPass)
-INITIALIZE_PASS_DEPENDENCY(TargetLibraryInfoWrapperPass)
+INITIALIZE_PASS_DEPENDENCY(TargetLibraryInfo)
 INITIALIZE_AG_DEPENDENCY(AliasAnalysis)
 INITIALIZE_PASS_END(GVN, "gvn", "Global Value Numbering", false, false)
 
@@ -2357,7 +2357,7 @@ bool GVN::runOnFunction(Function& F) {
   DataLayoutPass *DLP = getAnalysisIfAvailable<DataLayoutPass>();
   DL = DLP ? &DLP->getDataLayout() : nullptr;
   AC = &getAnalysis<AssumptionCacheTracker>().getAssumptionCache(F);
-  TLI = &getAnalysis<TargetLibraryInfoWrapperPass>().getTLI();
+  TLI = &getAnalysis<TargetLibraryInfo>();
   VN.setAliasAnalysis(&getAnalysis<AliasAnalysis>());
   VN.setMemDep(MD);
   VN.setDomTree(DT);
@@ -2370,8 +2370,7 @@ bool GVN::runOnFunction(Function& F) {
   for (Function::iterator FI = F.begin(), FE = F.end(); FI != FE; ) {
     BasicBlock *BB = FI++;
 
-    bool removedBlock = MergeBlockIntoPredecessor(
-        BB, DT, /* LoopInfo */ nullptr, VN.getAliasAnalysis(), MD);
+    bool removedBlock = MergeBlockIntoPredecessor(BB, this);
     if (removedBlock) ++NumGVNBlocks;
 
     Changed |= removedBlock;
@@ -2642,8 +2641,7 @@ bool GVN::performPRE(Function &F) {
 /// Split the critical edge connecting the given two blocks, and return
 /// the block inserted to the critical edge.
 BasicBlock *GVN::splitCriticalEdges(BasicBlock *Pred, BasicBlock *Succ) {
-  BasicBlock *BB = SplitCriticalEdge(
-      Pred, Succ, CriticalEdgeSplittingOptions(getAliasAnalysis(), DT));
+  BasicBlock *BB = SplitCriticalEdge(Pred, Succ, this);
   if (MD)
     MD->invalidateCachedPredecessors();
   return BB;
@@ -2656,8 +2654,7 @@ bool GVN::splitCriticalEdges() {
     return false;
   do {
     std::pair<TerminatorInst*, unsigned> Edge = toSplit.pop_back_val();
-    SplitCriticalEdge(Edge.first, Edge.second,
-                      CriticalEdgeSplittingOptions(getAliasAnalysis(), DT));
+    SplitCriticalEdge(Edge.first, Edge.second, this);
   } while (!toSplit.empty());
   if (MD) MD->invalidateCachedPredecessors();
   return true;

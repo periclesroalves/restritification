@@ -12,7 +12,7 @@ entry:
 ; CHECK-NEXT: landingpad
 ; CHECK: br label %catch
 
-; CHECK: catch.preheader.split-lp:
+; CHECK: catch.split-lp:
 ; CHECK-NEXT: landingpad
 ; CHECK: br label %catch
 

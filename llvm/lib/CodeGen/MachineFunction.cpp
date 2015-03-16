@@ -462,7 +462,7 @@ unsigned MachineFunction::addLiveIn(unsigned PReg,
 /// normal 'L' label is returned.
 MCSymbol *MachineFunction::getJTISymbol(unsigned JTI, MCContext &Ctx,
                                         bool isLinkerPrivate) const {
-  const DataLayout *DL = getTarget().getDataLayout();
+  const DataLayout *DL = getSubtarget().getDataLayout();
   assert(JumpTableInfo && "No jump tables");
   assert(JTI < JumpTableInfo->getJumpTables().size() && "Invalid JTI!");
 
@@ -477,7 +477,7 @@ MCSymbol *MachineFunction::getJTISymbol(unsigned JTI, MCContext &Ctx,
 /// getPICBaseSymbol - Return a function-local symbol to represent the PIC
 /// base.
 MCSymbol *MachineFunction::getPICBaseSymbol() const {
-  const DataLayout *DL = getTarget().getDataLayout();
+  const DataLayout *DL = getSubtarget().getDataLayout();
   return Ctx.GetOrCreateSymbol(Twine(DL->getPrivateGlobalPrefix())+
                                Twine(getFunctionNumber())+"$pb");
 }
@@ -600,7 +600,8 @@ MachineFrameInfo::getPristineRegs(const MachineBasicBlock *MBB) const {
   assert(MBB && "MBB must be valid");
   const MachineFunction *MF = MBB->getParent();
   assert(MF && "MBB must be part of a MachineFunction");
-  const TargetRegisterInfo *TRI = MF->getSubtarget().getRegisterInfo();
+  const TargetMachine &TM = MF->getTarget();
+  const TargetRegisterInfo *TRI = TM.getSubtargetImpl()->getRegisterInfo();
   BitVector BV(TRI->getNumRegs());
 
   // Before CSI is calculated, no registers are considered pristine. They can be
@@ -820,7 +821,7 @@ void MachineJumpTableInfo::dump() const { print(dbgs()); }
 void MachineConstantPoolValue::anchor() { }
 
 const DataLayout *MachineConstantPool::getDataLayout() const {
-  return TM.getDataLayout();
+  return TM.getSubtargetImpl()->getDataLayout();
 }
 
 Type *MachineConstantPoolEntry::getType() const {
@@ -842,13 +843,13 @@ MachineConstantPoolEntry::getSectionKind(const DataLayout *DL) const {
   switch (getRelocationInfo()) {
   default:
     llvm_unreachable("Unknown section kind");
-  case Constant::GlobalRelocations:
+  case 2:
     Kind = SectionKind::getReadOnlyWithRel();
     break;
-  case Constant::LocalRelocation:
+  case 1:
     Kind = SectionKind::getReadOnlyWithRelLocal();
     break;
-  case Constant::NoRelocation:
+  case 0:
     switch (DL->getTypeAllocSize(getType())) {
     case 4:
       Kind = SectionKind::getMergeableConst4();
@@ -860,7 +861,7 @@ MachineConstantPoolEntry::getSectionKind(const DataLayout *DL) const {
       Kind = SectionKind::getMergeableConst16();
       break;
     default:
-      Kind = SectionKind::getReadOnly();
+      Kind = SectionKind::getMergeableConst();
       break;
     }
   }

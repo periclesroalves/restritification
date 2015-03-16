@@ -1001,8 +1001,10 @@ bool Thumb2SizeReduce::ReduceMBB(MachineBasicBlock &MBB) {
 }
 
 bool Thumb2SizeReduce::runOnMachineFunction(MachineFunction &MF) {
-  STI = &static_cast<const ARMSubtarget &>(MF.getSubtarget());
-  TII = static_cast<const Thumb2InstrInfo *>(STI->getInstrInfo());
+  const TargetMachine &TM = MF.getTarget();
+  TII = static_cast<const Thumb2InstrInfo *>(
+      TM.getSubtargetImpl()->getInstrInfo());
+  STI = &TM.getSubtarget<ARMSubtarget>();
 
   // Optimizing / minimizing size?
   AttributeSet FnAttrs = MF.getFunction()->getAttributes();

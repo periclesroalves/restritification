@@ -8,12 +8,12 @@
 #include "MipsRegisterInfo.h"
 #include "MipsSubtarget.h"
 #include "MipsTargetMachine.h"
-#include "llvm/Analysis/TargetLibraryInfo.h"
 #include "llvm/CodeGen/FastISel.h"
 #include "llvm/CodeGen/MachineInstrBuilder.h"
 #include "llvm/IR/GlobalAlias.h"
 #include "llvm/IR/GlobalVariable.h"
 #include "llvm/Target/TargetInstrInfo.h"
+#include "llvm/Target/TargetLibraryInfo.h"
 
 using namespace llvm;
 
@@ -60,9 +60,9 @@ class MipsFastISel final : public FastISel {
   /// Subtarget - Keep a pointer to the MipsSubtarget around so that we can
   /// make the right decision when generating code for different targets.
   const TargetMachine &TM;
-  const MipsSubtarget *Subtarget;
   const TargetInstrInfo &TII;
   const TargetLowering &TLI;
+  const MipsSubtarget *Subtarget;
   MipsFunctionInfo *MFI;
 
   // Convenience variables to avoid some queries.
@@ -157,15 +157,14 @@ public:
   explicit MipsFastISel(FunctionLoweringInfo &funcInfo,
                         const TargetLibraryInfo *libInfo)
       : FastISel(funcInfo, libInfo), TM(funcInfo.MF->getTarget()),
-        Subtarget(
-            &static_cast<const MipsSubtarget &>(funcInfo.MF->getSubtarget())),
-        TII(*Subtarget->getInstrInfo()), TLI(*Subtarget->getTargetLowering()) {
+        TII(*TM.getSubtargetImpl()->getInstrInfo()),
+        TLI(*TM.getSubtargetImpl()->getTargetLowering()),
+        Subtarget(&TM.getSubtarget<MipsSubtarget>()) {
     MFI = funcInfo.MF->getInfo<MipsFunctionInfo>();
     Context = &funcInfo.Fn->getContext();
-    TargetSupported =
-        ((TM.getRelocationModel() == Reloc::PIC_) &&
-         ((Subtarget->hasMips32r2() || Subtarget->hasMips32()) &&
-          (static_cast<const MipsTargetMachine &>(TM).getABI().IsO32())));
+    TargetSupported = ((TM.getRelocationModel() == Reloc::PIC_) &&
+                       ((Subtarget->hasMips32r2() || Subtarget->hasMips32()) &&
+                        (Subtarget->isABI_O32())));
     UnsupportedFPMode = Subtarget->isFP64bit();
   }
 

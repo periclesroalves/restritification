@@ -43,18 +43,15 @@ let hasSideEffects = 0, isNotDuplicable = 1, Uses = [ESP] in
 // Pessimistically assume ADJCALLSTACKDOWN / ADJCALLSTACKUP will become
 // sub / add which can clobber EFLAGS.
 let Defs = [ESP, EFLAGS], Uses = [ESP] in {
-def ADJCALLSTACKDOWN32 : I<0, Pseudo, (outs), (ins i32imm:$amt1, i32imm:$amt2),
+def ADJCALLSTACKDOWN32 : I<0, Pseudo, (outs), (ins i32imm:$amt),
                            "#ADJCALLSTACKDOWN",
-                           []>,
+                           [(X86callseq_start timm:$amt)]>,
                           Requires<[NotLP64]>;
 def ADJCALLSTACKUP32   : I<0, Pseudo, (outs), (ins i32imm:$amt1, i32imm:$amt2),
                            "#ADJCALLSTACKUP",
                            [(X86callseq_end timm:$amt1, timm:$amt2)]>,
                           Requires<[NotLP64]>;
 }
-def : Pat<(X86callseq_start timm:$amt1),
-          (ADJCALLSTACKDOWN32 i32imm:$amt1, 0)>, Requires<[NotLP64]>;
-
 
 // ADJCALLSTACKDOWN/UP implicitly use/def RSP because they may be expanded into
 // a stack adjustment and the codegen must know that they may modify the stack
@@ -62,17 +59,16 @@ def : Pat<(X86callseq_start timm:$amt1),
 // Pessimistically assume ADJCALLSTACKDOWN / ADJCALLSTACKUP will become
 // sub / add which can clobber EFLAGS.
 let Defs = [RSP, EFLAGS], Uses = [RSP] in {
-def ADJCALLSTACKDOWN64 : I<0, Pseudo, (outs), (ins i32imm:$amt1, i32imm:$amt2),
+def ADJCALLSTACKDOWN64 : I<0, Pseudo, (outs), (ins i32imm:$amt),
                            "#ADJCALLSTACKDOWN",
-                           []>,
+                           [(X86callseq_start timm:$amt)]>,
                           Requires<[IsLP64]>;
 def ADJCALLSTACKUP64   : I<0, Pseudo, (outs), (ins i32imm:$amt1, i32imm:$amt2),
                            "#ADJCALLSTACKUP",
                            [(X86callseq_end timm:$amt1, timm:$amt2)]>,
                           Requires<[IsLP64]>;
 }
-def : Pat<(X86callseq_start timm:$amt1),
-          (ADJCALLSTACKDOWN64 i32imm:$amt1, 0)>, Requires<[IsLP64]>;
+
 
 
 // x86-64 va_start lowering magic.
@@ -1065,12 +1061,12 @@ def : Pat<(X86tcret (load addr:$dst), imm:$off),
           Requires<[Not64BitMode, IsNotPIC]>;
 
 def : Pat<(X86tcret (i32 tglobaladdr:$dst), imm:$off),
-          (TCRETURNdi tglobaladdr:$dst, imm:$off)>,
-          Requires<[NotLP64]>;
+          (TCRETURNdi texternalsym:$dst, imm:$off)>,
+          Requires<[Not64BitMode]>;
 
 def : Pat<(X86tcret (i32 texternalsym:$dst), imm:$off),
           (TCRETURNdi texternalsym:$dst, imm:$off)>,
-          Requires<[NotLP64]>;
+          Requires<[Not64BitMode]>;
 
 def : Pat<(X86tcret ptr_rc_tailcall:$dst, imm:$off),
           (TCRETURNri64 ptr_rc_tailcall:$dst, imm:$off)>,
@@ -1084,11 +1080,11 @@ def : Pat<(X86tcret_6regs (load addr:$dst), imm:$off),
 
 def : Pat<(X86tcret (i64 tglobaladdr:$dst), imm:$off),
           (TCRETURNdi64 tglobaladdr:$dst, imm:$off)>,
-          Requires<[IsLP64]>;
+          Requires<[In64BitMode]>;
 
 def : Pat<(X86tcret (i64 texternalsym:$dst), imm:$off),
           (TCRETURNdi64 texternalsym:$dst, imm:$off)>,
-          Requires<[IsLP64]>;
+          Requires<[In64BitMode]>;
 
 // Normal calls, with various flavors of addresses.
 def : Pat<(X86call (i32 tglobaladdr:$dst)),

@@ -24,7 +24,7 @@
 #include "llvm/Support/CommandLine.h"
 #include "llvm/Support/Debug.h"
 #include "llvm/Support/raw_ostream.h"
-#include "llvm/Analysis/TargetLibraryInfo.h"
+#include "llvm/Target/TargetLibraryInfo.h"
 using namespace llvm;
 
 #define DEBUG_TYPE "bounds-checking"
@@ -50,7 +50,7 @@ namespace {
 
     void getAnalysisUsage(AnalysisUsage &AU) const override {
       AU.addRequired<DataLayoutPass>();
-      AU.addRequired<TargetLibraryInfoWrapperPass>();
+      AU.addRequired<TargetLibraryInfo>();
     }
 
   private:
@@ -166,7 +166,7 @@ bool BoundsChecking::instrument(Value *Ptr, Value *InstVal) {
 
 bool BoundsChecking::runOnFunction(Function &F) {
   DL = &getAnalysis<DataLayoutPass>().getDataLayout();
-  TLI = &getAnalysis<TargetLibraryInfoWrapperPass>().getTLI();
+  TLI = &getAnalysis<TargetLibraryInfo>();
 
   TrapBB = nullptr;
   BuilderTy TheBuilder(F.getContext(), TargetFolder(DL));

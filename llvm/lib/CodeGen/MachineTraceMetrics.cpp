@@ -52,11 +52,12 @@ void MachineTraceMetrics::getAnalysisUsage(AnalysisUsage &AU) const {
 
 bool MachineTraceMetrics::runOnMachineFunction(MachineFunction &Func) {
   MF = &Func;
-  const TargetSubtargetInfo &ST = MF->getSubtarget();
-  TII = ST.getInstrInfo();
-  TRI = ST.getRegisterInfo();
+  TII = MF->getSubtarget().getInstrInfo();
+  TRI = MF->getSubtarget().getRegisterInfo();
   MRI = &MF->getRegInfo();
   Loops = &getAnalysis<MachineLoopInfo>();
+  const TargetSubtargetInfo &ST =
+    MF->getTarget().getSubtarget<TargetSubtargetInfo>();
   SchedModel.init(ST.getSchedModel(), &ST, TII);
   BlockInfo.resize(MF->getNumBlockIDs());
   ProcResourceCycles.resize(MF->getNumBlockIDs() *
