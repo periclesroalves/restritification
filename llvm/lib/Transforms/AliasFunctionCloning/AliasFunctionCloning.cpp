@@ -23,8 +23,8 @@ STATISTIC(NumFuncs,
 void AliasFunctionCloning::getAnalysisUsage(AnalysisUsage &AU) const
 {
 	AU.setPreservesCFG();
-	AU.addRequired<AliasAnalysis>();
-	AU.addRequired<DataLayoutPass>();
+	AU.addRequiredTransitive<AliasAnalysis>();
+	AU.addRequiredTransitive<DataLayoutPass>();
 }
 
 void AliasFunctionCloning::createNoAliasFunctionClones(Module &M)
