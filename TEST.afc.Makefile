@@ -11,7 +11,7 @@ CURDIR  := $(shell cd .; pwd)
 PROGDIR := $(PROJ_SRC_ROOT)
 RELDIR  := $(subst $(PROGDIR),,$(CURDIR))
 
-LLVM_BUILD = "/home/vhscampos/Research/restritification/llvm/build/Debug+Asserts"
+LLVM_BUILD = "/home/vhscampos/restritification/llvm/build/Release+Asserts"
 
 
 $(PROGRAMS_TO_TEST:%=test.$(TEST).%): \

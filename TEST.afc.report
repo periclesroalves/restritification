@@ -22,6 +22,8 @@ $TrimRepeatedPrefix = 1;
             ["NumStaticIInsts",     '([0-9]+).*Number of InvokeInsts statically replaced by a clone'],
             ["NumIInsts",     '([0-9]+).*Number of candidate InvokeInsts'],
 			["NumFuncsCompletelyReplaced",	'([0-9]+).*Number of functions completely replaced by restrictification'],
+			["NumPointerFuncs",	'([0-9]+).*Number of functions that take pointer arguments'],
+			["NumPointerFuncsAtLeastOneCall",	'([0-9]+).*Number of functions with at least one call'],
             [],
 # Times
 #Output/treeadd.aa.andersens.txt:   Total Execution Time: 0 seconds (0.00111997 wall clock)
