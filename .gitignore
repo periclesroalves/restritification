@@ -17,6 +17,9 @@ build-*/
 tests/speccpu2006/
 *.pyc
 projects/
+!projects/CMakeLists.txt
+!projects/LLVMBuild.txt
+!projects/Makefile
 
 ## Eclipse files
 *.pydevproject
