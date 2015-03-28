@@ -16,7 +16,7 @@ build-*/
 
 tests/speccpu2006/
 *.pyc
-projects/
+projects/*
 !projects/CMakeLists.txt
 !projects/LLVMBuild.txt
 !projects/Makefile
