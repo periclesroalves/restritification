@@ -2,7 +2,7 @@
 [Tt]humbs.db
 *.DS_Store
 
-#Project files
+#Build files
 build/
 build-*/
 
@@ -15,8 +15,8 @@ build-*/
 
 
 tests/speccpu2006/
-llvm/utils/llvm-build/llvmbuild/*.pyc
-test-suite/
+*.pyc
+projects/
 
 ## Eclipse files
 *.pydevproject
